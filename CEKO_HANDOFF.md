@@ -94,12 +94,12 @@ Aşağıdakiler mevcut kaynak kodundaki pin eşlemeleridir; üretici referansın
 
 Hoparlörün pakette bulunması, konektör uyumu ve empedansı fiziksel kart/şema üzerinden teyit edilmeli. Dokunmatik kullanıcı etkileşimi bu sürümde uygulanmadı.
 
-Doğrulanmış derleme hedefi ESP-IDF **5.5.2**, ESP32-S3. Manifest aralığı `>=5.5.0,<6.0.0`; IDF 6.x'e doğrudan geçilmemeli.
+Derleme hedefi ESP-IDF **6.1**, ESP32-S3. Manifest aralığı `>=6.1.0,<7.0.0`. v0.1 belgeleri 5.5.2 diyordu; proje 6.1'e taşındı, 5.5 ile derleneceği artık doğrulanmıyor. IDF 6.0'da eski `driver` bileşeni `esp_driver_*` başlıklarını dışarı açmadığı için `esp_codec_dev` en az 1.6.2 olmalı; kök `CMakeLists.txt` henüz taşınmamış bileşenler için köprü kuruyor.
 
 | Bileşen | Manifest şartı |
 |---|---|
 | ESP-SR | `2.5.3` |
-| esp_codec_dev | `~1.3.4` |
+| esp_codec_dev | `^1.6.2` (1.3.x IDF 6'da derlenmiyor) |
 | esp_lcd_sh8601 | `^1.0.0` |
 | esp_websocket_client | `^1.5.0` |
 | LVGL | `~9.2.2` |
@@ -137,7 +137,7 @@ Prototip API anahtarını `menuconfig` üzerinden firmware'e gömer. Gerçek `sd
 
 ## 7. Derleme ve ilk çalıştırma
 
-ZIP'i açıp `ceko` klasöründe ESP-IDF 5.5.2 terminalini kullan:
+ZIP'i açıp `ceko` klasöründe ESP-IDF 6.1 terminalini kullan:
 
 ```sh
 idf.py set-target esp32s3
@@ -154,7 +154,7 @@ Port yer tutucudur; gerçek cihaz portuyla değiştir. İlk yükleme **tam `flas
 
 `docs/VALIDATION.md` önceki geliştirme sırasında şunları kaydediyor:
 
-- ESP-IDF 5.5.2 ile tam firmware, bootloader, bölüm tablosu ve konuşma modeli üretildi.
+- ESP-IDF 5.5.2 ile tam firmware, bootloader, bölüm tablosu ve konuşma modeli üretildi. **Bu kayıt 6.1 geçişinden öncedir ve artık geçerli sayılmamalı.**
 - ELF içinde `speech_start`, `realtime_start`, `face_start`, `board_audio_init` sembolleri doğrulandı.
 - ASan/UBSan ile kayıt sınırları, parçalı WebSocket akışı, örnekleme dönüşümü ve RMS testleri geçti. LeakSanitizer ortam kısıtı nedeniyle kapalıydı; sızıntı testi yapılmış sayılmaz.
 - Yüz önizlemesinde JavaScript sözdizimi kontrolü geçti; tarayıcı görsel testi yapılmadı.
@@ -172,7 +172,7 @@ Derlemede gerçek olmayan, boş olmayan bağlantı ayarları kullanıldığı be
 
 ## 9. Sonraki geliştiricinin iş sırası
 
-1. Kaynak ZIP'i aç; README, VALIDATION ve bu belgeyi oku. Mevcut mimariyi koruyarak IDF 5.5.2 ile derlemeyi yeniden üret.
+1. Kaynak ZIP'i aç; README, VALIDATION ve bu belgeyi oku. Mevcut mimariyi koruyarak IDF 6.1 ile derlemeyi yeniden üret.
 2. Offline demo yükle. Ekran yönü/renkleri, göz kırpma ve ağız görünümünü kullanıcıyla değerlendir.
 3. Mikrofon verisi ve hoparlör çıkışını ayrı ayrı doğrula. Ses yoksa API veya wake eşiğini değiştirmeden önce codec/slot/kazancı kontrol et.
 4. “Hey ceko”yu farklı mesafe ve gürültü koşullarında dene; deneme sayısı, başarılı algılama ve yanlış uyanmaları kaydet. Önce sessiz/yakın test, sonra gerçek masaüstü ortamı.
@@ -192,7 +192,7 @@ Sonraki sürüm adayları: güvenilir özel uyandırma modeli; ilk hece kaybın�
 
 ## 10. Yeni oturuma verilecek başlangıç talimatı
 
-> Ekli Ceko v0.1 ZIP'ini ve CEKO_HANDOFF.md dosyasını devral. ESP-IDF 5.5.2, Waveshare ESP32-S3-Touch-AMOLED-1.32 ve OpenAI Realtime mini ile devam et. Bas-konuş istemiyorum; “hey ceko” ile uyanmalı, göz kırpan iki göz ve sesle hareket eden ağız olmalı. Repo şimdilik açma. Kaynak ve doğrulama belgesini incele; ilk öncelik fiziksel ekran/ses, deneysel MultiNet uyandırması ve gerçek API bağlantısını doğrulamak. Derleme başarısını donanım başarısı olarak sunma. Model adını, pinleri veya çalışmayan bir özelliği tahmin ederek değiştirme; bulguyu kaydet ve gerekli değişikliği uygula.
+> Ekli Ceko ZIP'ini ve CEKO_HANDOFF.md dosyasını devral. ESP-IDF 6.1, Waveshare ESP32-S3-Touch-AMOLED-1.32 ve v0.2'deki kalıcı oturumlu ağ katmanıyla devam et. Bas-konuş istemiyorum; “hey ceko” ile uyanmalı, göz kırpan iki göz ve sesle hareket eden ağız olmalı. Repo şimdilik açma. Kaynak ve doğrulama belgesini incele; ilk öncelik fiziksel ekran/ses, deneysel MultiNet uyandırması ve gerçek API bağlantısını doğrulamak. Derleme başarısını donanım başarısı olarak sunma. Model adını, pinleri veya çalışmayan bir özelliği tahmin ederek değiştirme; bulguyu kaydet ve gerekli değişikliği uygula.
 
 ## Referans izi
 

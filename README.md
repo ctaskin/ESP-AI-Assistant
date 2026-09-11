@@ -1,7 +1,7 @@
 # Ceko v0.2 — ESP-IDF sesli masaüstü asistanı
 
 **Kart:** Waveshare ESP32-S3-Touch-AMOLED-1.32, 466×466, 8 MB Flash / 8 MB PSRAM, ES8311.
-**Hedef:** ESP-IDF 5.5.2; Arduino kullanılmaz.
+**Hedef:** ESP-IDF 6.1; Arduino kullanılmaz.
 
 ## Davranış
 
@@ -43,7 +43,7 @@ Uyandırma tanıyıcısı gecikmeli karar verebildiği için başlangıçta “h
 ## Kurulum — Mac / VS Code
 
 1. ZIP'i aç, `ceko` klasörünü VS Code ile aç.
-2. ESP-IDF eklentisinde **5.5.2** kurulumunu seç. `ESP-IDF: Open ESP-IDF Terminal` aç.
+2. ESP-IDF eklentisinde **6.1** kurulumunu seç. `ESP-IDF: Open ESP-IDF Terminal` aç.
 3. Proje klasöründe:
 
 ```sh
@@ -67,9 +67,9 @@ idf.py build
 idf.py -p /dev/cu.usbmodemXXXX flash monitor
 ```
 
-**ESP-IDF sürümü 5.5.x olmalı.** IDF 6.x ile derleme `esp_codec_dev` içinde
-`driver/gpio.h bulunamadı` hatasıyla durur; `CMakeLists.txt` bunu en başta açık bir mesajla
-engeller. Ayrıntı ve kurtarma adımları aşağıdaki "Derleme sorunları" bölümünde.
+**Proje ESP-IDF 6.1 ile derlenir** (`main/idf_component.yml`: `>=6.1.0,<7.0.0`).
+Hedef yonga esp32s3 değilse derleme en başta açık bir mesajla durur; ayrıntı aşağıdaki
+"Derleme sorunları" bölümünde.
 
 `XXXX` yerine eklentinin bulduğu gerçek portu yaz. İlk yüklemede **tam `flash`** yap:
 MultiNet model bölümü de yüklenir. Yalnızca `app-flash` kullanma. Seri monitörden çıkış: `Ctrl+]`.
@@ -80,27 +80,32 @@ veya kota hatası seri logda kod olarak görünür. Burada gerçek API hesabıyl
 
 ### Derleme sorunları
 
-**`fatal error: driver/gpio.h: No such file or directory` (esp_codec_dev içinde)**
-ESP-IDF 6.x kullanıyorsun. IDF 6.0'da eski `driver` bileşeni `esp_driver_gpio` /
-`esp_driver_i2c` başlıklarını artık dışarı açmıyor; `esp_codec_dev` bu başlıkları
-bulamıyor. Bu proje ESP-IDF **5.5.x** ile derlenir (`main/idf_component.yml`:
-`>=5.5.0,<6.0.0`).
+**`fatal error: driver/gpio.h` veya `driver/i2c_master.h` (esp_codec_dev içinde)**
+ESP-IDF 6.0'da eski `driver` bileşeni `esp_driver_gpio`, `esp_driver_i2c` gibi
+bileşenleri artık dışarı açmıyor; bunlar `PRIV_REQUIRES` içine taşındı. Yalnızca
+`driver` isteyen `esp_codec_dev` 1.3.x bu yüzden başlıkları bulamıyor. Repoda iki
+düzeltme var: `main/idf_component.yml` artık `esp_codec_dev ^1.6.2` istiyor (bu sürüm
+IDF 5.3 ve üstünde `esp_driver_*` bileşenlerini kendi seçiyor) ve kök `CMakeLists.txt`,
+henüz taşınmamış bileşenlere eksik başlık yollarını veriyor.
 
-**`Hedef yonga 'esp32'`** Proje yalnızca ESP32-S3 içindir. Eski `sdkconfig` dosyası
-hedefi `esp32` olarak sabitliyordu.
-
-Temiz başlangıç (ESP-IDF 5.5.x terminalinde):
+Eski çözümlenmiş sürümleri ve yanlış hedefi atmak için:
 
 ```sh
-idf.py --version                       # v5.5.x görmelisin
 rm -rf build managed_components dependencies.lock sdkconfig
 idf.py set-target esp32s3
 idf.py build
 ```
 
-`dependencies.lock` bu repoya IDF 6.1 ve `esp32` hedefiyle çözülmüş halde girmişti.
-Yukarıdaki adımlardan sonra doğru sürümlerle yeniden üretilir; oluşan yeni dosyayı
-commit edebilirsin.
+**`Hedef yonga 'esp32'`** Repoya daha önce `CONFIG_IDF_TARGET="esp32"` içeren bir
+`sdkconfig` girmişti ve derlemeyi yanlış yongaya yönlendiriyordu. Dosya artık
+izlenmiyor; yukarıdaki `set-target` komutu doğrusunu üretir.
+
+`dependencies.lock` bu repoya `esp32` hedefiyle ve eski `esp_codec_dev` sürümüyle
+çözülmüş halde girmişti. Yukarıdaki adımlardan sonra yeniden üretilir; oluşan yeni
+dosyayı commit edebilirsin.
+
+Başka bir managed bileşen de aynı `driver/...` hatasını verirse, adını kök
+`CMakeLists.txt` içindeki köprü listesine ekle.
 
 ### Hoparlör
 

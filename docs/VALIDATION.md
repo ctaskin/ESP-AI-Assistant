@@ -23,18 +23,29 @@
 - Gecikme kazancı ölçülmedi; kalıcı oturumun uzun süreli bellek/bağlantı dayanıklılığı
   ve yeniden bağlanma davranışı fiziksel kartta denenmedi.
 
-## Repoya girmiş tutarsız derleme durumu (11 Eylül 2026'da fark edildi)
+## ESP-IDF 6.1 geçişi ve repoya girmiş yanlış derleme durumu
 
-Repodaki `dependencies.lock` **ESP-IDF 6.1.0** ve **`target: esp32`** ile çözülmüştü;
-izlenen `sdkconfig` dosyası da `CONFIG_IDF_TARGET="esp32"` içeriyordu. Bu, aşağıdaki
-"ESP-IDF 5.5.2 ile derlendi" kaydıyla çelişir: o derlemenin hangi ortamda yapıldığı
-doğrulanamıyor ve v0.1 derleme kanıtı bu nedenle şüpheli sayılmalı. `sdkconfig` artık
-izlenmiyor, kök `CMakeLists.txt` yanlış IDF sürümünü ve yanlış hedefi derleme başında
-durduruyor.
+Proje ESP-IDF **6.1** ile derleniyor (`.vscode/settings.json` ve `dependencies.lock`
+bunu gösteriyor). v0.1 belgelerindeki "ESP-IDF 5.5.2" kayıtları geçersizdir.
+
+Derlemeyi durduran üç şey repodaydı:
+
+- `main/idf_component.yml` `esp_codec_dev ~1.3.4` istiyordu. 1.3.x yalnızca eski
+  `driver` bileşenini istiyor; IDF 6.0 bu bileşenden `esp_driver_gpio` /
+  `esp_driver_i2c` başlıklarını dışarı açmayı bıraktığı için derleme
+  `driver/gpio.h: No such file or directory` ile duruyordu. Kısıt `^1.6.2` yapıldı.
+- İzlenen `sdkconfig` dosyası `CONFIG_IDF_TARGET="esp32"` içeriyordu; derleme yanlış
+  yongaya gidiyordu. Dosya artık izlenmiyor, kök `CMakeLists.txt` yanlış hedefte
+  derlemeyi durduruyor.
+- Manifest `idf: ">=5.5.0,<6.0.0"` diyordu; `>=6.1.0,<7.0.0` yapıldı.
+
+Kök `CMakeLists.txt` ayrıca IDF 6'da hâlâ eski düzene güvenen managed bileşenlere
+eksik `esp_driver_*` başlık yollarını veriyor. Bu köprünün ve yeni `esp_codec_dev`
+sürümünün gerçekten derlendiği **bu ortamda doğrulanamadı**; ESP-IDF burada kurulu değil.
 
 ## v0.1 sırasında yapılanlar
 
-- ESP-IDF 5.5.2 / ESP32-S3 için tüm uygulama C dosyaları derlendi.
+- ESP-IDF 5.5.2 / ESP32-S3 için tüm uygulama C dosyaları derlendi (6.1 geçişinden önce; tekrarlanmalı).
 - Donanımdan bağımsız C testleri AddressSanitizer + UndefinedBehaviorSanitizer altında geçti.
   Bu çalışma ortamında ptrace nedeniyle LeakSanitizer kapatıldı; sızıntı testi yapılmış sayılmaz.
 - Testler: sessizlikte kayıt göndermeme, konuşma bitişi, uzun kayıt reddi, WebSocket mesaj
@@ -46,7 +57,7 @@ durduruyor.
 
 ## Tam firmware derlemesi — başarılı
 
-ESP-IDF 5.5.2 ve kilit dosyasındaki bağımlılıklarla `idf.py build` tamamlandı.
+ESP-IDF 5.5.2 ve o günkü kilit dosyasıyla `idf.py build` tamamlandı. Bu kanıt 6.1 geçişinden öncedir.
 Uygulama, bootloader, bölüm tablosu ve konuşma modeli üretildi.
 
 | Bileşen | Dosya boyutu | Ayrılan bölüm |
