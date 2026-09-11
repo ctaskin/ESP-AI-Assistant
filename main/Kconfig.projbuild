@@ -1,0 +1,49 @@
+menu "Ceko"
+config CEKO_WIFI_SSID
+    string "Wi-Fi SSID (2.4 GHz)"
+    default ""
+config CEKO_WIFI_PASSWORD
+    string "Wi-Fi password"
+    default ""
+config CEKO_OPENAI_API_KEY
+    string "OpenAI API key (personal prototype only)"
+    default ""
+config CEKO_MODEL
+    string "OpenAI Realtime model ID"
+    default "gpt-realtime-2.1-mini"
+config CEKO_VOICE
+    string "Voice"
+    default "marin"
+config CEKO_WAKE_PHRASE
+    string "Experimental MultiNet spelling for hey ceko"
+    default "hey jeko"
+config CEKO_WAKE_CONFIDENCE
+    int "Wake confidence percent"
+    range 50 99
+    default 85
+config CEKO_SILENCE_MS
+    int "End utterance after silence (ms)"
+    range 400 3000
+    default 1000
+config CEKO_MAX_RECORD_SECONDS
+    int "Maximum utterance seconds"
+    range 5 30
+    default 20
+config CEKO_SPEAKER_VOLUME
+    int "Speaker volume percent"
+    range 0 90
+    default 65
+config CEKO_MIC_GAIN
+    int "Microphone gain dB"
+    range 0 42
+    default 24
+config CEKO_MIC_RIGHT_SLOT
+    bool "Use right I2S microphone slot (normally left)"
+    default n
+config CEKO_DISPLAY_ROTATE_180
+    bool "Rotate display 180 degrees (vendor orientation)"
+    default y
+config CEKO_FACE_DEMO
+    bool "Offline face animation demo (no Wi-Fi / API / microphone)"
+    default n
+endmenu
