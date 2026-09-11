@@ -132,6 +132,8 @@ Model kimliği ve ses adı **kaynakta yapılandırılan değerlerdir**; bu hando
 
 Önceki görüşmedeki aylık maliyet tahminleri bu belgenin doğrulanmış bütçesi değildir. Gerçek kullanım ve güncel API fiyatlarıyla yeniden hesaplanmalı. Mevcut ChatGPT aboneliğinin API kullanımını karşıladığı varsayılmamalı.
 
+TLS kök sertifikası: `api.openai.com` zincirinin tepesi GlobalSign Root CA tarafından çapraz imzalanmış GTS Root R4'tür ve ESP-IDF 6.1 paketi o klasik kökü artık taşımıyor. Kök `certs/GlobalSign_Root_CA.pem` olarak depoda ve `MBEDTLS_CUSTOM_CERTIFICATE_BUNDLE` ile yerleşik paketin üzerine ekleniyor. Kök 2028-01-28'de sona eriyor; o tarihten önce zincir yeniden doğrulanmalı. Ayrıntı: `certs/README.md`.
+
 Prototip API anahtarını `menuconfig` üzerinden firmware'e gömer. Gerçek `sdkconfig`, binary ve anahtar paylaşılmamalı. TLS sertifika doğrulaması ve NTP açıktır. Ürünleşmede cihaz kimliği ve kısa ömürlü erişim sağlayan backend ayrı iş kalemidir.
 
 ## 7. Derleme ve ilk çalıştırma

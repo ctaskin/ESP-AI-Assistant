@@ -242,6 +242,9 @@ static void network_task(void *arg) {
         if (snprintf(uri,sizeof uri,"wss://api.openai.com/v1/realtime?model=%s",CONFIG_CEKO_MODEL)>=(int)sizeof uri) {
             fail("Model adi cok uzun"); goto cleanup;
         }
+        // The bundle is extended with certs/GlobalSign_Root_CA.pem: the top of
+        // api.openai.com's chain is a GTS Root R4 cross-signed by that root, and
+        // IDF 6.1 no longer ships it. See certs/README.md.
         esp_websocket_client_config_t conf={ .uri=uri,.headers=headers,.crt_bundle_attach=esp_crt_bundle_attach,
             .disable_auto_reconnect=true,.network_timeout_ms=10000,.buffer_size=4096,.task_stack=12288 };
         ws=esp_websocket_client_init(&conf);
