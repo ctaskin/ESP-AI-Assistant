@@ -1,4 +1,11 @@
-
 build/
 
 managed_components/
+
+# idf.py tarafından üretilen yerel yapılandırma. Hedef yongayı ve gizli
+# anahtarları (Wi-Fi, OpenAI) içerdiği için repoda tutulmaz; kaynak doğru
+# varsayılanlar sdkconfig.defaults dosyasındadır.
+sdkconfig
+sdkconfig.old
+
+.DS_Store

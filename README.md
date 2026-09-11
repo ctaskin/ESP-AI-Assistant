@@ -75,6 +75,40 @@ repo açınca `sdkconfig`, `build` ve `managed_components` eklenmez. Kaynak pake
 Ürünleşmede cihaz kimlik doğrulaması ve kısa ömürlü token veren backend eklenmeli.
 TLS sertifika kontrolü açıktır, sistem saati NTP ile ayarlanır. Sertifika kontrolünü kapatma.
 
+### Derleme sorunları
+
+Derleme, ESP-IDF **5.5.2** ve **esp32s3** hedefi dışında bir ortamda başlatılırsa yapılandırma
+aşamasında açık bir hatayla durur. İki tipik durum:
+
+**`driver/gpio.h: No such file or directory`** — `managed_components/espressif__esp_codec_dev`
+içinde derlerken görülür. Nedeni ESP-IDF 6.x kullanmaktır: IDF 6'da `driver` bileşeni parçalara
+ayrıldı ve gpio başlıklarını artık aktarmıyor, `esp_codec_dev` 1.3.x ise `driver/gpio.h`
+bekliyor. Çözüm, bileşeni yamalamak değil, 5.5.2 ortamını etkinleştirmektir. Manifest de
+`idf: ">=5.5.0,<6.0.0"` der; IDF 6.x'e geçiş, bağımlılıkların yeniden doğrulanmasını gerektiren
+ayrı bir iştir.
+
+**Yanlış hedef** — `set-target` çalıştırılmadan derlenirse hedef `esp32` kalabilir. `sdkconfig`
+varsa `sdkconfig.defaults` **uygulanmaz**, dolayısıyla oradaki `CONFIG_IDF_TARGET="esp32s3"`
+satırı da devreye girmez. Belirtileri: derleme çıktısında `xtensa-esp32-elf-gcc` ve
+`Building ESP-IDF components for target esp32`, ayrıca
+`unknown kconfig symbol 'SPIRAM_MODE_OCT'` uyarısı (ESP32 klasikte oktal PSRAM yoktur).
+ESP32 hedefinde SH8601 QSPI ekran ve MultiNet7 zaten çalışmaz.
+
+Her iki durumda da temiz başlangıç:
+
+```sh
+idf.py fullclean
+rm -f sdkconfig
+idf.py set-target esp32s3
+idf.py menuconfig   # Ceko ayarlarını yeniden gir
+idf.py build
+```
+
+`sdkconfig` üretilen bir dosyadır ve repoda tutulmaz; hedefi ve anahtarları taşıdığı için
+depoya girerse bir sonraki derlemeye yanlış hedefi dayatır. `dependencies.lock` hedef veya IDF
+sürümü değişince bileşen yöneticisi tarafından yeniden çözülür; doğru ortamda oluşan sürümü
+işlemek gerekir.
+
 ## Ayarlar
 
 | Ayar | Varsayılan | Amaç |
