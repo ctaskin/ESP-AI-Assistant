@@ -45,6 +45,24 @@ sorunu sor. Ayrıntı: "Uyandırma sözcüğü".
 Uyandırma sözcüğünü söyledikten sonra **gözler yeşile dönünce konuş**. Aynı nefeste devam
 edilen sorunun ilk hecesi kaçabilir; ön ses tamponlaması bu sürümde yok.
 
+### Arka arkaya soru sorma
+
+Ceko cevabını bitirdikten sonra **6 saniye dinlemede kalır** — gözler yeşil durur ve doğrudan
+ikinci soruyu sorabilirsin, uyandırma sözcüğünü tekrarlaman gerekmez. Bir şey demezsen kendi
+kendine boşta moduna döner ve yeniden "Hi ESP" gerekir.
+
+Süre `menuconfig > Ceko > Keep listening after an answer` ile değiştirilir; `0` bu davranışı
+kapatır ve her soru için uyandırma gerekir. Seri log hangi pencerenin açıldığını yazar:
+
+```
+I (…) speech: Listening (new question, 5 s to start speaking)
+I (…) speech: Listening (follow-up, 6 s to start speaking)
+```
+
+İki sınır: her tur ayrı bir istektir, **sohbet geçmişi tutulmaz** — ikinci soru birincinin
+bağlamını bilmez. Ve başarısız bir istekten sonra pencere açılmaz, doğrudan boşta moduna
+dönülür.
+
 ## Kurulum — Mac / VS Code
 
 1. ZIP'i aç, `ceko` klasörünü VS Code ile aç.
@@ -264,6 +282,7 @@ demektir; bağlantı hatası alıyorsan sorun uyandırmada değil ağ/TLS taraf�
 | Sessizlik | 1000 ms | Sorunun bittiğine karar verme |
 | Maksimum kayıt | 20 saniye | RAM ve kullanım sınırı; aşılırsa kayıt gönderilmez |
 | Konuşma bekleme | 5 saniye | Uyandırmadan sonra ses yoksa ücretsiz beklemeye döner |
+| Cevap sonrası dinleme | 6 saniye | Uyandırma sözcüğü olmadan ikinci soru; `0` kapatır |
 | Yanıt sınırı | 400 token / 60 sn ses | Kısa cevap ve sınırlı kuyruk |
 | Mikrofon I2S slot | Sol | Ses gelmezse donanım testinde sağ slot denenebilir |
 | Ekran yönü | 180° | Üretici demo yönü; menüden değiştirilebilir |

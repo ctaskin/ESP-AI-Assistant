@@ -29,6 +29,19 @@ config CEKO_SILENCE_MS
     int "End utterance after silence (ms)"
     range 400 3000
     default 1000
+config CEKO_FOLLOWUP_SECONDS
+    int "Keep listening after an answer (seconds, 0 = off)"
+    range 0 20
+    default 6
+    help
+      After Ceko answers it stays in listening mode for this long, so a
+      conversation can continue without repeating the wake word. Say nothing
+      and it returns to idle on its own; the wake word (or a touch) is needed
+      again after that.
+
+      Each turn is still a separate request and no conversation history is
+      kept between them. After a failed request the follow-up window is not
+      opened.
 config CEKO_MAX_RECORD_SECONDS
     int "Maximum utterance seconds"
     range 5 30

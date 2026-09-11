@@ -9,6 +9,10 @@
 // menuconfig > ESP Speech Recognition > Load Multiple Wake Words.
 #define CEKO_WAKE_HINT "hi esp"
 
+// How long a fresh capture waits for speech to start before giving up. The
+// follow-up window after an answer has its own length, CEKO_FOLLOWUP_SECONDS.
+#define CEKO_SPEECH_START_SECONDS 5
+
 typedef enum { CEKO_BOOT, CEKO_IDLE, CEKO_LISTEN, CEKO_THINK, CEKO_SPEAK, CEKO_ERROR } ceko_state_t;
 void ceko_state_set(ceko_state_t state);
 ceko_state_t ceko_state_get(void);

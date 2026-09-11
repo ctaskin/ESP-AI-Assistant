@@ -9,16 +9,27 @@
 
 static void gate_tests(void) {
     capture_gate_t g;
-    capture_gate_init(&g,20,1000);
+    capture_gate_init(&g,20,1000,5);
     for(int i=0;i<249;++i) assert(capture_gate_feed(&g,320,false)==CAPTURE_MORE);
     assert(capture_gate_feed(&g,320,false)==CAPTURE_EMPTY);
-    capture_gate_init(&g,20,1000);
+    capture_gate_init(&g,20,1000,5);
     for(int i=0;i<30;++i) assert(capture_gate_feed(&g,320,true)==CAPTURE_MORE);
     for(int i=0;i<49;++i) assert(capture_gate_feed(&g,320,false)==CAPTURE_MORE);
     assert(capture_gate_feed(&g,320,false)==CAPTURE_READY);
-    capture_gate_init(&g,5,1000);
+    capture_gate_init(&g,5,1000,5);
     for(int i=0;i<249;++i) assert(capture_gate_feed(&g,320,true)==CAPTURE_MORE);
     assert(capture_gate_feed(&g,320,true)==CAPTURE_TOO_LONG);
+    // Follow-up window: a longer wait must keep the gate open past the 5 s point
+    // and then close on its own when nothing is said.
+    capture_gate_init(&g,20,1000,8);
+    for(int i=0;i<399;++i) assert(capture_gate_feed(&g,320,false)==CAPTURE_MORE);
+    assert(capture_gate_feed(&g,320,false)==CAPTURE_EMPTY);
+    // Speaking inside the follow-up window still ends on silence, not on the wait.
+    capture_gate_init(&g,20,1000,8);
+    for(int i=0;i<299;++i) assert(capture_gate_feed(&g,320,false)==CAPTURE_MORE);
+    for(int i=0;i<30;++i) assert(capture_gate_feed(&g,320,true)==CAPTURE_MORE);
+    for(int i=0;i<49;++i) assert(capture_gate_feed(&g,320,false)==CAPTURE_MORE);
+    assert(capture_gate_feed(&g,320,false)==CAPTURE_READY);
 }
 static void websocket_tests(void) {
     ws_message_t m={0};

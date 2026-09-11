@@ -55,7 +55,9 @@ Başka bilgisayara/oturuma geçerken ZIP ve bu belge birlikte aktarılmalı. Yuk
 
 Dinlemeye ikinci giriş yolu ekrana dokunmaktır; yalnızca `IDLE` durumunda kabul edilir ve durum geçişi karşılaştır-değiştir ile yapılır, böylece tek kayıt tamponunun sahiplik kuralı korunur.
 
-Her uyandırma **tek soru–tek cevap** içindir. Sohbet geçmişi tutulmaz. Yanıt sırasında mikrofon verisi tüketilip atılır; söz kesme ve tam çift yönlü konuşma yoktur. AEC kapalıdır.
+Cevap bittikten sonra `CEKO_FOLLOWUP_SECONDS` (varsayılan 6 sn) boyunca dinleme penceresi açık kalır; kullanıcı uyandırma sözcüğünü tekrarlamadan ikinci soruyu sorabilir. Pencerede konuşulmazsa kayıt kapısı `CAPTURE_EMPTY` verip `IDLE` durumuna döner. Başarısız istekten sonra pencere açılmaz. Tampon sahiplik kuralı korunur: pencere, kayıt ağ görevince gönderilip yanıt tamamlandıktan sonra açılır.
+
+Her tur yine **tek soru–tek cevap** içindir. Sohbet geçmişi tutulmaz. Yanıt sırasında mikrofon verisi tüketilip atılır; söz kesme ve tam çift yönlü konuşma yoktur. AEC kapalıdır.
 
 Tek kayıt tamponu ağ görevine ödünç verilir; `IDLE` durumuna dönene kadar üzerine yazılmaması gerekir. Bu sahiplik kuralı, yeni sohbet veya söz kesme özellikleri eklenirken korunmalı.
 
@@ -126,6 +128,7 @@ Derleme hedefi ESP-IDF **6.1**, ESP32-S3. Manifest aralığı `>=6.0.0,<7.0.0`.
 | Hoparlör seviyesi | %65 |
 | Ekran yönü | 180° |
 | Konuşmaya başlama beklemesi | 5 saniye; ses yoksa kayıt gönderilmez |
+| Cevap sonrası dinleme penceresi | 6 saniye; sessiz kalınırsa IDLE |
 | Konuşma sonu sessizliği | 1000 ms |
 | Maksimum kayıt | 20 saniye; aşılırsa kesilmiş kayıt gönderilmez |
 | Yanıt sınırı | 400 çıktı tokenı; alınan seste 60 saniyelik yerel tavan |

@@ -276,6 +276,18 @@ cleanup:
         if (!ok) { ceko_state_set(CEKO_ERROR); vTaskDelay(pdMS_TO_TICKS(2500)); }
         // Acoustic tail cooldown; capture task continues draining microphone locally.
         ceko_state_set(CEKO_THINK); ceko_level_set(0); vTaskDelay(pdMS_TO_TICKS(600));
+#if CONFIG_CEKO_FOLLOWUP_SECONDS > 0
+        if (ok) {
+            // Leave a follow-up window open so a conversation does not need the
+            // wake word for every turn. The capture gate closes it by itself if
+            // nothing is said, which returns the face to IDLE.
+            // The recording buffer is free again here: it was sent before
+            // playback began and nothing below touches it.
+            ceko_status_set("Dinliyorum"); ceko_state_set(CEKO_LISTEN);
+            continue;
+        }
+        // After a failure go straight back to idle instead of listening on.
+#endif
         ceko_status_set(CEKO_WAKE_HINT); ceko_state_set(CEKO_IDLE);
     }
 }

@@ -64,7 +64,16 @@ static void recognition_task(void *arg) {
                 afe->disable_wakenet(afe_data);
                 if (state == CEKO_LISTEN) {
                     used = 0;
-                    capture_gate_init(&gate, CONFIG_CEKO_MAX_RECORD_SECONDS, CONFIG_CEKO_SILENCE_MS);
+                    // A capture opened from IDLE is a fresh question (wake word
+                    // or touch). One opened from THINK/SPEAK is the follow-up
+                    // window realtime.c leaves open after an answer.
+                    bool followup = (prev != CEKO_IDLE && prev != CEKO_BOOT);
+                    unsigned wait = followup ? CONFIG_CEKO_FOLLOWUP_SECONDS
+                                             : CEKO_SPEECH_START_SECONDS;
+                    capture_gate_init(&gate, CONFIG_CEKO_MAX_RECORD_SECONDS,
+                                      CONFIG_CEKO_SILENCE_MS, wait);
+                    ESP_LOGI("speech", "Listening (%s, %u s to start speaking)",
+                             followup ? "follow-up" : "new question", wait);
                 }
             }
             prev = state;
