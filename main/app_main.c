@@ -84,9 +84,11 @@ void app_main(void) {
         ESP_LOGE("ceko", "NVS: %s; back up settings before erase-flash", esp_err_to_name(err));
         return;
     }
-    if (!strlen(CONFIG_CEKO_WIFI_SSID) || !strlen(CONFIG_CEKO_OPENAI_API_KEY)) {
-        ceko_state_set(CEKO_ERROR); ceko_status_set("menuconfig > Ceko");
-        ESP_LOGE("ceko", "Set Wi-Fi and OpenAI API key with idf.py menuconfig");
+    const char *provider_error = realtime_config_error();
+    if (!strlen(CONFIG_CEKO_WIFI_SSID) || provider_error) {
+        ceko_state_set(CEKO_ERROR); ceko_status_set(provider_error ? provider_error : "menuconfig > Ceko");
+        ESP_LOGE("ceko", "Set Wi-Fi and the service API key with idf.py menuconfig: %s",
+                 provider_error ? provider_error : "Wi-Fi SSID missing");
         return;
     }
     board_audio_init();

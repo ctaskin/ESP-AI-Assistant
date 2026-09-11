@@ -725,7 +725,7 @@ CONFIG_CEKO_WIFI_PASSWORD=""
 # default:
 CONFIG_CEKO_OPENAI_API_KEY=""
 # default:
-CONFIG_CEKO_MODEL="gpt-realtime-2.1-mini"
+CONFIG_CEKO_MODEL="gpt-realtime-2.1"
 # default:
 CONFIG_CEKO_VOICE="marin"
 # default:

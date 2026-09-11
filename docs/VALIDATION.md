@@ -1,6 +1,29 @@
-# Ceko v0.1 doğrulama
+# Ceko doğrulama
 
-## Yapılanlar
+## v0.2 (kalıcı oturum, hafıza, web araması) — bu ortamda yapılanlar
+
+- Donanımdan bağımsız testlere iki modül eklendi ve ASan/UBSan altında geçti:
+  `session_policy` (bağlan/yenile/geri çekilme, bağlantı koparsa davranış, sonsuz
+  oturum durumu) ve `history` (halka tampon, UTF-8 sınırında kesme, kontrol
+  karakterlerinin temizlenmesi, kapasiteye sığdırma).
+- `tools/syntax-check.sh`: `main/realtime.c`, `main/rt_openai.c` ve `main/rt_gemini.c`
+  dosyaları `tests/stubs` altındaki taklit başlıklarla `-Wall -Wextra -Werror`
+  tip kontrolünden geçti; Gemini dalı ayrıca ayrı derlenerek kontrol edildi.
+
+## v0.2 — bu ortamda yapılamayanlar
+
+- **ESP-IDF derlemesi yapılmadı.** Bu makinede ESP-IDF kurulu değil; `idf.py build`
+  çalıştırılmadı. Taklit başlıklarla tip kontrolü gerçek derlemenin yerine geçmez;
+  özellikle `esp_websocket_client_config_t` alan adları ve cJSON imzaları gerçek
+  bileşenlere karşı doğrulanmalı.
+- **Canlı API çağrısı yapılmadı.** OpenAI'de `reasoning.effort`, giriş transkripsiyonu
+  ve `tools:[{type:"web_search"}]`; Gemini'de tüm mesaj şeması (`setup`,
+  `realtimeInput.audio`, `activityStart/End`, `serverContent`, `sessionResumptionUpdate`)
+  dokümantasyondan yazıldı, doğrulanmadı.
+- Gecikme kazancı ölçülmedi; kalıcı oturumun uzun süreli bellek/bağlantı dayanıklılığı
+  ve yeniden bağlanma davranışı fiziksel kartta denenmedi.
+
+## v0.1 sırasında yapılanlar
 
 - ESP-IDF 5.5.2 / ESP32-S3 için tüm uygulama C dosyaları derlendi.
 - Donanımdan bağımsız C testleri AddressSanitizer + UndefinedBehaviorSanitizer altında geçti.
@@ -34,6 +57,18 @@ Kendi ayarlarını girip derlediğinde firmware boyutu biraz değişebilir.
 - Türkçe “hey ceko” algılama başarısı ve saat başına yanlış aktivasyon ölçümü.
 - Gerçek OpenAI API isteği ve API hesabında model erişimi kontrolü.
 - Gerçek Türkçe ses kalitesi, yanıt gecikmesi, uzun süreli bellek/bağlantı dayanıklılığı.
+
+## v0.2 için eklenecek fiziksel testler
+
+1. Açılışta seri logda `session open (openai|gemini)` satırını gör; ilk soruya kadar
+   bağlantının kurulmuş olduğunu doğrula.
+2. Peş peşe iki soru sor; ikincisinde birinciye atıf yap ("az önce ne dedim?").
+3. Wi-Fi'yi kapat/aç; arka planda yeniden bağlandığını ve sonraki sorunun çalıştığını gör.
+4. Oturum yenileme mesajını (`renewing session`) bekle; sonrasında hafızanın
+   korunduğunu doğrula.
+5. Güncel bilgi gerektiren bir soru sor ("bugün ... fiyatı ne?") ve aramanın
+   çalışıp çalışmadığını kaydet.
+6. İlk yanıt gecikmesini v0.1 ile karşılaştırarak ölç.
 
 ## İlk fiziksel test sırası
 

@@ -20,5 +20,7 @@ esp_err_t board_audio_write(const int16_t *mono, size_t count);
 void face_start(void);
 void speech_start(void);
 void realtime_start(void);
+// NULL when the selected provider has usable menuconfig values.
+const char *realtime_config_error(void);
 // Ownership: one static capture buffer is loaned until state returns to IDLE.
 bool realtime_submit(const int16_t *pcm16, size_t count);

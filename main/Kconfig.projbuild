@@ -5,15 +5,91 @@ config CEKO_WIFI_SSID
 config CEKO_WIFI_PASSWORD
     string "Wi-Fi password"
     default ""
+
+choice CEKO_PROVIDER
+    prompt "Realtime voice service"
+    default CEKO_PROVIDER_OPENAI
+    help
+      OpenAI is the validated path. Gemini Live adds Google Search on the
+      service side, costs less per minute, but its wire protocol has not been
+      verified against a live account in this project yet.
+config CEKO_PROVIDER_OPENAI
+    bool "OpenAI Realtime"
+config CEKO_PROVIDER_GEMINI
+    bool "Google Gemini Live (experimental)"
+endchoice
+
 config CEKO_OPENAI_API_KEY
     string "OpenAI API key (personal prototype only)"
+    depends on CEKO_PROVIDER_OPENAI
     default ""
 config CEKO_MODEL
     string "OpenAI Realtime model ID"
-    default "gpt-realtime-2.1-mini"
+    depends on CEKO_PROVIDER_OPENAI
+    default "gpt-realtime-2.1"
+    help
+      gpt-realtime-2.1 answers better; gpt-realtime-2.1-mini costs about a
+      third per minute of audio.
 config CEKO_VOICE
-    string "Voice"
+    string "OpenAI voice"
+    depends on CEKO_PROVIDER_OPENAI
     default "marin"
+config CEKO_REASONING_EFFORT
+    string "OpenAI reasoning effort (empty = do not send)"
+    depends on CEKO_PROVIDER_OPENAI
+    default "low"
+    help
+      low keeps replies fast. Leave empty for accounts or models that reject
+      the field.
+config CEKO_TRANSCRIBE_MODEL
+    string "OpenAI input transcription model"
+    depends on CEKO_PROVIDER_OPENAI
+    default "gpt-4o-mini-transcribe"
+    help
+      Only used when conversation memory is on; it is billed separately.
+config CEKO_OPENAI_MCP_URL
+    string "Remote MCP server URL for search (empty = try hosted web search)"
+    depends on CEKO_PROVIDER_OPENAI && CEKO_WEB_SEARCH
+    default ""
+config CEKO_OPENAI_MCP_LABEL
+    string "Remote MCP server label"
+    depends on CEKO_PROVIDER_OPENAI && CEKO_WEB_SEARCH
+    default "search"
+config CEKO_OPENAI_MCP_TOKEN
+    string "Remote MCP authorization value (optional)"
+    depends on CEKO_PROVIDER_OPENAI && CEKO_WEB_SEARCH
+    default ""
+
+config CEKO_GEMINI_API_KEY
+    string "Google AI Studio API key"
+    depends on CEKO_PROVIDER_GEMINI
+    default ""
+config CEKO_GEMINI_MODEL
+    string "Gemini Live model ID"
+    depends on CEKO_PROVIDER_GEMINI
+    default "gemini-3.1-flash-live-preview"
+config CEKO_GEMINI_VOICE
+    string "Gemini prebuilt voice"
+    depends on CEKO_PROVIDER_GEMINI
+    default "Puck"
+
+config CEKO_WEB_SEARCH
+    bool "Let the assistant search the web"
+    default y
+    help
+      Gemini uses Google Search on the service side. OpenAI needs a remote MCP
+      search server; without one the experimental hosted web search tool is
+      requested and the session fails visibly if the account rejects it.
+config CEKO_MEMORY_TURNS
+    int "Conversation turns carried across a reconnect (0 = off)"
+    range 0 6
+    default 4
+    help
+      The open session already remembers the conversation. These turns are
+      transcripts kept in RAM so context survives a dropped or renewed
+      connection. Above 0 the service is asked to transcribe input audio,
+      which is billed separately.
+
 config CEKO_WAKE_PHRASE
     string "Experimental MultiNet spelling for hey ceko"
     default "hey jeko"

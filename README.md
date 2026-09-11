@@ -1,7 +1,7 @@
-# Ceko v0.1 — ESP-IDF sesli masaüstü asistanı
+# Ceko v0.2 — ESP-IDF sesli masaüstü asistanı
 
 **Kart:** Waveshare ESP32-S3-Touch-AMOLED-1.32, 466×466, 8 MB Flash / 8 MB PSRAM, ES8311.
-**Hedef:** ESP-IDF 5.5.2; Arduino kullanılmaz. Repo oluşturulmadı.
+**Hedef:** ESP-IDF 5.5.2; Arduino kullanılmaz.
 
 ## Davranış
 
@@ -9,12 +9,20 @@
 2. Beklerken ses yalnızca cihazdaki AFE ve deneysel komut tanıyıcıda işlenir; internete gönderilmez.
 3. “Hey ceko” algılanınca gözler büyür ve yeşile döner. `Dinliyorum` görünür.
 4. Bundan sonraki konuşma alınır; 1 saniyelik sessizlikte kayıt tamamlanır.
-5. Ses OpenAI Realtime mini'ye TLS üzerinden gönderilir. Yanıt geldikçe hoparlörden çalınır.
+5. Ses, **açılışta kurulmuş ve açık tutulan** WebSocket oturumundan gönderilir.
+   Yanıt geldikçe hoparlörden çalınır.
 6. Ağız, **çalınan sesin RMS şiddetine** göre açılıp kapanır. Fonem/dudak eşleştirmesi değildir.
-7. Cevap bitince tekrar “hey ceko” bekler. Her çağrı bağımsızdır; v0.1'de sohbet hafızası yoktur.
+7. Cevap bitince tekrar “hey ceko” bekler. **Sohbet aynı oturumda devam eder:** az önce
+   konuşulan konuya atıf yapabilirsin. Bağlantı koparsa veya oturum yenilenirse son
+   turların kısa özeti yeni oturuma taşınır.
 
-**Bas-konuş yok.** API'nin `commit` komutunu yerel sessizlik algılama tetikler.
-Bilgisayar/bridge açık kalmadan, kart Wi-Fi üzerinden doğrudan OpenAI'ye bağlanır.
+**Bas-konuş yok.** Turun bittiğini yerel sessizlik algılama bildirir.
+Bilgisayar/bridge açık kalmadan, kart Wi-Fi üzerinden doğrudan servise bağlanır.
+
+**Servis seçimi:** `menuconfig > Ceko > Realtime voice service` ile OpenAI Realtime
+veya Google Gemini Live seçilir. Güncel bilgi gerektiren sorular için Gemini'de
+Google araması servis tarafında çalışır; OpenAI'de uzak bir MCP arama sunucusu
+adresi girmek gerekir. Karşılaştırma, fiyatlar ve gerekçe: `docs/PROVIDERS.md`.
 
 ## Önce bilmen gereken iki sınır
 
@@ -26,6 +34,8 @@ Bilgisayar/bridge açık kalmadan, kart Wi-Fi üzerinden doğrudan OpenAI'ye ba�
   wake-word modeli eğitimi/entegrasyonu gerekir. Alternatif ifade sessizce devreye sokulmaz.
 - **Yarı çift yönlü:** Ceko cevap verirken mikrofon işlenip atılır. Kendi sesine uyanmaz;
   fakat konuşurken sözünü kesme yoktur. Bu sürümde akustik yankı giderme kapalıdır.
+- **Gemini yolu doğrulanmadı:** Gemini Live mesaj alanları dokümantasyondan yazıldı,
+  canlı bir hesapla denenmedi. OpenAI yolu da bu projede canlı çağrıyla test edilmedi.
 
 Uyandırma tanıyıcısı gecikmeli karar verebildiği için başlangıçta “hey ceko” dedikten sonra
 **gözler yeşile dönünce konuş**. Aynı nefeste devam edilen komutun ilk hecesi kaçabilir.
@@ -44,8 +54,11 @@ idf.py menuconfig
 4. **Ceko** menüsüne gir:
    - `Wi-Fi SSID`: 2.4 GHz ağ adı.
    - `Wi-Fi password`: ağ şifresi.
+   - `Realtime voice service`: OpenAI Realtime (varsayılan) veya Gemini Live.
    - `OpenAI API key`: ayrı API hesabının anahtarı. ChatGPT Plus dahil değildir.
-   - `OpenAI Realtime model ID`: varsayılan `gpt-realtime-2.1-mini`.
+     Gemini seçersen `Google AI Studio API key` alanı gelir.
+   - `OpenAI Realtime model ID`: varsayılan `gpt-realtime-2.1`. Ucuz seçenek:
+     `gpt-realtime-2.1-mini`.
    - Ses: `marin`, hoparlör seviyesi `%65`, mikrofon kazancı `24 dB`.
 5. Kaydet/çık ve derle:
 
@@ -70,8 +83,11 @@ bağlı olmalı. Paketinde hoparlör yoksa uygun parça gerekir; konektör ve y�
 ### API anahtarının yeri
 
 Bu kişisel prototipte anahtar `menuconfig` üzerinden firmware'e gömülür; flash'tan çıkarılabilir.
-Bu yüzden firmware ve gerçek `sdkconfig` dosyanı paylaşma. `.gitignore` hazırdır; daha sonra
-repo açınca `sdkconfig`, `build` ve `managed_components` eklenmez. Kaynak paketi anahtar içermez.
+Bu yüzden firmware ve gerçek `sdkconfig` dosyanı paylaşma. **Dikkat:** `.gitignore` şu an
+yalnızca `build/` ve `managed_components/` dizinlerini dışarıda tutuyor; `sdkconfig` repoda
+izleniyor ve içindeki anahtar alanları şimdilik boş. `menuconfig` ile gerçek anahtarını
+girdikten sonra bu dosyayı commit etme; kalıcı çözüm için `sdkconfig` satırını `.gitignore`
+dosyasına ekleyip `git rm --cached sdkconfig` çalıştır.
 Ürünleşmede cihaz kimlik doğrulaması ve kısa ömürlü token veren backend eklenmeli.
 TLS sertifika kontrolü açıktır, sistem saati NTP ile ayarlanır. Sertifika kontrolünü kapatma.
 
@@ -79,6 +95,11 @@ TLS sertifika kontrolü açıktır, sistem saati NTP ile ayarlanır. Sertifika k
 
 | Ayar | Varsayılan | Amaç |
 |---|---|---|
+| Servis | OpenAI Realtime | Gemini Live ile değiştirilebilir |
+| Model | `gpt-realtime-2.1` | Mini'ye göre daha iyi cevap, ~3 kat ses maliyeti |
+| Akıl yürütme | `low` | Gecikmeyi düşük tutar; boş bırakılırsa alan gönderilmez |
+| Web araması | Açık | Gemini'de Google araması; OpenAI'de MCP sunucusu adresi ister |
+| Bağlam taşıma | 4 tur | Kopma/yenileme sonrası taşınan tur sayısı; 0 kapatır |
 | Uyandırma yazımı | `hey jeko` | Türkçe ceko için deneysel İngilizce yazım |
 | Güven eşiği | %85 | Yanlış uyanma/kaçırma dengesi |
 | Sessizlik | 1000 ms | Sorunun bittiğine karar verme |
@@ -88,9 +109,13 @@ TLS sertifika kontrolü açıktır, sistem saati NTP ile ayarlanır. Sertifika k
 | Mikrofon I2S slot | Sol | Ses gelmezse donanım testinde sağ slot denenebilir |
 | Ekran yönü | 180° | Üretici demo yönü; menüden değiştirilebilir |
 
-Oturum yalnızca kaydın sonunda açılır; internet bağlantısı kurulurken konuşma kaybolmaz,
-ancak ilk yanıt gecikmesine TLS/oturum açma süresi eklenir. V0.1 maliyet/akış basitliği tercihidir.
-Beklemedeki ses, uyandırma çerçevesi ve cevap sırasındaki mikrofon sesi gönderilmez.
+Oturum açılışta kurulur ve açık tutulur; ilk yanıt gecikmesine artık TLS/oturum açma
+süresi eklenmez. Servisin oturum ömrü dolmadan, cihaz **boştayken** yeni oturuma geçilir;
+bağlantı koparsa 2 saniyeden 60 saniyeye çıkan aralıklarla arka planda yeniden denenir.
+Oturumun açık olması sesin gönderildiği anlamına gelmez: beklemedeki ses, uyandırma
+çerçevesi ve cevap sırasındaki mikrofon sesi gönderilmez; sunucu tarafı ses algılama
+kapalıdır. Sohbet hafızası ücretsiz değildir; her tur önceki konuşmayı da girdi sayar,
+`Conversation turns carried across a reconnect` ile sınırlanabilir.
 Başarısız istek otomatik tekrar gönderilmez; böylece aynı soruya çift ücret riski azaltılır.
 Yanlış uyandırma sonrası gerçek konuşma algılanırsa o kayıt API'ye gönderilebilir.
 
@@ -107,12 +132,17 @@ Yanlış uyandırma sonrası gerçek konuşma algılanırsa o kayıt API'ye gön
 | `main/board.c` | Güç, ES8311 ve I2S ses sürücüsü |
 | `main/face.c` | AMOLED, LVGL 9, göz ve ağız animasyonu |
 | `main/speech.c` | Yerel AFE, MultiNet, uyandırma ve kayıt |
-| `main/realtime.c` | OpenAI WebSocket, ses kuyruğu, hata ve zaman aşımı |
+| `main/realtime.c` | Kalıcı WebSocket oturumu, ses kuyruğu, hata ve zaman aşımı |
+| `main/rt_openai.c` | OpenAI Realtime protokolü, araçlar, transkript |
+| `main/rt_gemini.c` | Gemini Live protokolü, Google araması, oturum devamı |
+| `main/session_policy.c` | Bağlan/yenile/geri çekil kararları |
+| `main/history.c` | Yeniden bağlanınca taşınan kısa konuşma özeti |
 | `main/capture_gate.c` | Konuşma/sessizlik ve kayıt süresi sınırları |
 | `main/audio_math.c` | 16↔24 kHz FIR dönüşümü ve RMS |
 | `main/ws_message.c` | Sınırlı boyutlu parçalı WebSocket mesaj birleştirme |
 | `tests/test_core.c` | Donanımdan bağımsız sınır/akış testleri |
 | `docs/VALIDATION.md` | Gerçekte yapılan kontroller ve kalan fiziksel testler |
+| `docs/PROVIDERS.md` | Servis karşılaştırması, fiyatlar ve mimari kararlar |
 
 ## Test
 
@@ -122,8 +152,10 @@ C derleyicisi bulunan bilgisayarda:
 bash tools/test.sh
 ```
 
-AddressSanitizer/UndefinedBehaviorSanitizer ile kayıt sınırları, parçalı mesajlar ve ses
-akışı doğrulanır. Ptrace kullanan ortamlarda LeakSanitizer çalışmıyorsa:
+AddressSanitizer/UndefinedBehaviorSanitizer ile kayıt sınırları, parçalı mesajlar, ses
+akışı, konuşma özeti ve oturum yenileme/geri çekilme kuralları doğrulanır. Aynı komut,
+ESP-IDF olmayan makinede `tools/syntax-check.sh` ile taşıma ve protokol dosyalarını da
+tip kontrolünden geçirir; bu `idf.py build` yerine geçmez. Ptrace kullanan ortamlarda LeakSanitizer çalışmıyorsa:
 `ASAN_OPTIONS=detect_leaks=0 bash tools/test.sh` (sadece leak kontrolü kapanır).
 
 ## Kaynaklar
@@ -133,7 +165,8 @@ akışı doğrulanır. Ptrace kullanan ortamlarda LeakSanitizer çalışmıyorsa
 - [ESP-SR komut tanıma](https://docs.espressif.com/projects/esp-sr/en/latest/esp32s3/speech_command_recognition/README.html).
 - [OpenAI Realtime konuşma olayları](https://developers.openai.com/api/docs/guides/realtime-conversations).
 - [OpenAI WebSocket bağlantısı](https://developers.openai.com/api/docs/guides/voice-websockets).
-- [GPT-Realtime-2.1 Mini](https://developers.openai.com/api/docs/models/gpt-realtime-2.1-mini).
+- [GPT-Realtime-2.1](https://developers.openai.com/api/docs/models/gpt-realtime-2.1).
+- [Gemini Live API WebSocket referansı](https://ai.google.dev/api/live).
 
 Kart pinleri ve panel init değerleri üretici referansından doğrulandı. Uygulama kodu bu
 prototip için yazıldı. ESP-IDF, ESP-SR, LVGL ve codec bileşenleri kendi lisansları altındadır;

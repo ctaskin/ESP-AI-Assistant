@@ -4,6 +4,12 @@ Tarih: 11 Eylül 2026
 Proje sahibi: Cahit Taşkın  
 Durum: Firmware derlemesi tamamlanmış, fiziksel kart ve canlı API doğrulaması bekleyen prototip.
 
+> **v0.2 notu:** Ağ katmanı yeniden yazıldı. Oturum artık kalıcı, sohbet aynı oturumda
+> devam ediyor, servis (OpenAI Realtime / Gemini Live) `menuconfig`'den seçiliyor ve web
+> araması eklendi. Gerekçe, fiyat karşılaştırması ve doğrulanmayanlar: `docs/PROVIDERS.md`.
+> Aşağıdaki 3. ve 6. bölümler v0.2'ye göre güncellendi; v0.2 kodu ESP-IDF ile
+> **derlenmedi**, canlı API ile **denenmedi**.
+
 ## 1. Amaç ve kullanıcının kararları
 
 Waveshare ESP32-S3-Touch-AMOLED-1.32 kartıyla Türkçe konuşan masaüstü AI asistanı geliştiriliyor. Adı **Ceko**.
@@ -34,7 +40,11 @@ Başka bilgisayara/oturuma geçerken ZIP ve bu belge birlikte aktarılmalı. Yuk
 | `main/face.c` | SH8601 AMOLED, LVGL 9, göz/ağız animasyonu |
 | `main/speech.c` | AFE/VAD, MultiNet, uyandırma ve kayıt |
 | `main/capture_gate.c` | Konuşma bitişi, boş/uzun kayıt sınırları |
-| `main/realtime.c` | TLS WebSocket oturumu, ses gönderme/çalma, hata yönetimi |
+| `main/realtime.c` | Kalıcı TLS WebSocket oturumu, ses gönderme/çalma, hata yönetimi |
+| `main/rt_proto.h`, `main/rt_openai.c`, `main/rt_gemini.c` | Servis protokolleri (OpenAI Realtime, Gemini Live) |
+| `main/session_policy.c` | Bağlan/yenile/geri çekil kararları (host testli) |
+| `main/history.c` | Yeniden bağlanmada taşınan kısa konuşma özeti (host testli) |
+| `tests/stubs/`, `tools/syntax-check.sh` | ESP-IDF'siz makinede tip kontrolü |
 | `main/audio_math.c` | 16↔24 kHz FIR örnekleme dönüşümü ve RMS |
 | `main/ws_message.c` | Parçalı WebSocket mesajlarının sınırlı birleştirilmesi |
 | `main/Kconfig.projbuild` | `menuconfig > Ceko` seçenekleri |
@@ -48,11 +58,11 @@ Başka bilgisayara/oturuma geçerken ZIP ve bu belge birlikte aktarılmalı. Yuk
 2. `IDLE`: Turkuaz gözler kırpılır. Mikrofon yerel AFE ve MultiNet tarafından işlenir; bekleme sesi API'ye gönderilmez.
 3. Uyandırma algılanınca `LISTEN`: Gözler yeşile döner, sonraki ses PSRAM'de tutulur. Uyandırmayı tetikleyen çerçeve gönderilmez.
 4. Konuşma sonrası 1 saniye sessizlik kaydı bitirir. `THINK` durumuna geçilir.
-5. Bu noktada yeni WebSocket oturumu açılır; kayıt 16 kHz'den 24 kHz'e çevrilerek gönderilir. Yerel bitiş kararı `input_audio_buffer.commit` ve `response.create` akışını tetikler.
+5. Kayıt, açılıştan beri açık tutulan WebSocket oturumundan gönderilir. OpenAI'de 24 kHz'e çevrilip `input_audio_buffer.commit` + `response.create`, Gemini'de 16 kHz olarak `activityStart`/`activityEnd` ile iletilir. Oturum kapalıysa o an açılır.
 6. Gelen 24 kHz PCM ses 16 kHz'e çevrilip hoparlörde çalınır. `SPEAK` sırasında ağız, çalınan sesin RMS şiddetine göre hareket eder; fonem eşlemesi değildir.
-7. Yanıt/çalma tamamlanınca oturum kapanır. 600 ms akustik bekleme ardından yeniden `IDLE` olur.
+7. Yanıt/çalma tamamlanınca oturum **açık kalır**. 600 ms akustik bekleme ardından yeniden `IDLE` olur.
 
-Her uyandırma **tek soru–tek cevap** içindir. Sohbet geçmişi tutulmaz. Yanıt sırasında mikrofon verisi tüketilip atılır; söz kesme ve tam çift yönlü konuşma yoktur. AEC kapalıdır.
+Sohbet aynı oturumda sürer. Oturum ömrü dolmadan cihaz boştayken yenilenir; kopma veya yenileme olduğunda son turların kısa özeti (OpenAI) ya da `sessionResumption` handle'ı (Gemini) ile bağlam taşınır. Yanıt sırasında mikrofon verisi tüketilip atılır; söz kesme ve tam çift yönlü konuşma yoktur. AEC kapalıdır. Beklemedeki ses hâlâ gönderilmez: sunucu tarafı ses algılama kapalıdır.
 
 Tek kayıt tamponu ağ görevine ödünç verilir; `IDLE` durumuna dönene kadar üzerine yazılmaması gerekir. Bu sahiplik kuralı, yeni sohbet veya söz kesme özellikleri eklenirken korunmalı.
 
@@ -100,7 +110,13 @@ Kesin çözülmüş sürümler için `dependencies.lock` korunmalı. CPU 240 MHz
 
 | Ayar | Mevcut varsayılan/davranış |
 |---|---|
-| Model kimliği | `gpt-realtime-2.1-mini` |
+| Servis | OpenAI Realtime (varsayılan) veya Gemini Live |
+| Model kimliği | `gpt-realtime-2.1` (ucuz seçenek: `gpt-realtime-2.1-mini`) |
+| Akıl yürütme | `reasoning.effort = low`; boş bırakılırsa alan gönderilmez |
+| Web araması | Açık; Gemini'de `googleSearch`, OpenAI'de uzak MCP sunucusu |
+| Bağlam taşıma | 4 tur; 0 kapatır |
+| Oturum yenileme | OpenAI 55. dakikada, Gemini 9. dakikada, cihaz boştayken |
+| Yeniden bağlanma | 2 → 60 saniye artan gecikme |
 | Ses | `marin` |
 | Uyandırma yazımı / eşik | `hey jeko` / %85 |
 | Mikrofon | 16 kHz PCM16, varsayılan sol I2S slot, 24 dB kazanç |
@@ -172,7 +188,7 @@ bash tools/test.sh
 ASAN_OPTIONS=detect_leaks=0 bash tools/test.sh
 ```
 
-Sonraki sürüm adayları: güvenilir özel uyandırma modeli; ilk hece kaybını önleyen tamponlama; sohbet hafızası; AEC ve söz kesme; backend anahtar yönetimi; OTA; yerel model sağlayıcısı. Bunlar v0.1'de tamamlanmış değildir.
+Sonraki sürüm adayları: güvenilir özel uyandırma modeli; ilk hece kaybını önleyen tamponlama; AEC ve söz kesme; backend anahtar yönetimi; OTA; yerel model sağlayıcısı. Sohbet hafızası ve web araması v0.2'de eklendi ancak canlı doğrulaması yapılmadı.
 
 ## 10. Yeni oturuma verilecek başlangıç talimatı
 
