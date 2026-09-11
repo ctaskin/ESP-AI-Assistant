@@ -23,6 +23,15 @@
 - Gecikme kazancı ölçülmedi; kalıcı oturumun uzun süreli bellek/bağlantı dayanıklılığı
   ve yeniden bağlanma davranışı fiziksel kartta denenmedi.
 
+## Repoya girmiş tutarsız derleme durumu (11 Eylül 2026'da fark edildi)
+
+Repodaki `dependencies.lock` **ESP-IDF 6.1.0** ve **`target: esp32`** ile çözülmüştü;
+izlenen `sdkconfig` dosyası da `CONFIG_IDF_TARGET="esp32"` içeriyordu. Bu, aşağıdaki
+"ESP-IDF 5.5.2 ile derlendi" kaydıyla çelişir: o derlemenin hangi ortamda yapıldığı
+doğrulanamıyor ve v0.1 derleme kanıtı bu nedenle şüpheli sayılmalı. `sdkconfig` artık
+izlenmiyor, kök `CMakeLists.txt` yanlış IDF sürümünü ve yanlış hedefi derleme başında
+durduruyor.
+
 ## v0.1 sırasında yapılanlar
 
 - ESP-IDF 5.5.2 / ESP32-S3 için tüm uygulama C dosyaları derlendi.

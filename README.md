@@ -67,12 +67,40 @@ idf.py build
 idf.py -p /dev/cu.usbmodemXXXX flash monitor
 ```
 
+**ESP-IDF sürümü 5.5.x olmalı.** IDF 6.x ile derleme `esp_codec_dev` içinde
+`driver/gpio.h bulunamadı` hatasıyla durur; `CMakeLists.txt` bunu en başta açık bir mesajla
+engeller. Ayrıntı ve kurtarma adımları aşağıdaki "Derleme sorunları" bölümünde.
+
 `XXXX` yerine eklentinin bulduğu gerçek portu yaz. İlk yüklemede **tam `flash`** yap:
 MultiNet model bölümü de yüklenir. Yalnızca `app-flash` kullanma. Seri monitörden çıkış: `Ctrl+]`.
 Kart görünmüyorsa BOOT'a basılı tutarak USB'ye bağla, ardından bırak.
 
 Kullanılabilir OpenAI model adları hesap bazında değişebilir. `model_not_found`, `invalid_api_key`
 veya kota hatası seri logda kod olarak görünür. Burada gerçek API hesabıyla doğrulama yapılmadı.
+
+### Derleme sorunları
+
+**`fatal error: driver/gpio.h: No such file or directory` (esp_codec_dev içinde)**
+ESP-IDF 6.x kullanıyorsun. IDF 6.0'da eski `driver` bileşeni `esp_driver_gpio` /
+`esp_driver_i2c` başlıklarını artık dışarı açmıyor; `esp_codec_dev` bu başlıkları
+bulamıyor. Bu proje ESP-IDF **5.5.x** ile derlenir (`main/idf_component.yml`:
+`>=5.5.0,<6.0.0`).
+
+**`Hedef yonga 'esp32'`** Proje yalnızca ESP32-S3 içindir. Eski `sdkconfig` dosyası
+hedefi `esp32` olarak sabitliyordu.
+
+Temiz başlangıç (ESP-IDF 5.5.x terminalinde):
+
+```sh
+idf.py --version                       # v5.5.x görmelisin
+rm -rf build managed_components dependencies.lock sdkconfig
+idf.py set-target esp32s3
+idf.py build
+```
+
+`dependencies.lock` bu repoya IDF 6.1 ve `esp32` hedefiyle çözülmüş halde girmişti.
+Yukarıdaki adımlardan sonra doğru sürümlerle yeniden üretilir; oluşan yeni dosyayı
+commit edebilirsin.
 
 ### Hoparlör
 
@@ -83,11 +111,10 @@ bağlı olmalı. Paketinde hoparlör yoksa uygun parça gerekir; konektör ve y�
 ### API anahtarının yeri
 
 Bu kişisel prototipte anahtar `menuconfig` üzerinden firmware'e gömülür; flash'tan çıkarılabilir.
-Bu yüzden firmware ve gerçek `sdkconfig` dosyanı paylaşma. **Dikkat:** `.gitignore` şu an
-yalnızca `build/` ve `managed_components/` dizinlerini dışarıda tutuyor; `sdkconfig` repoda
-izleniyor ve içindeki anahtar alanları şimdilik boş. `menuconfig` ile gerçek anahtarını
-girdikten sonra bu dosyayı commit etme; kalıcı çözüm için `sdkconfig` satırını `.gitignore`
-dosyasına ekleyip `git rm --cached sdkconfig` çalıştır.
+Bu yüzden firmware ve gerçek `sdkconfig` dosyanı paylaşma. `sdkconfig` artık `.gitignore`
+içinde ve repoda izlenmiyor; `sdkconfig.defaults` üzerinden yeniden üretilir. Daha önce
+repoya girmiş olan kopya `esp32` hedefiyle üretilmişti ve derlemeyi yanlış yongaya
+yönlendiriyordu; bilgisayarındaki eski dosyayı silip `idf.py set-target esp32s3` çalıştır.
 Ürünleşmede cihaz kimlik doğrulaması ve kısa ömürlü token veren backend eklenmeli.
 TLS sertifika kontrolü açıktır, sistem saati NTP ile ayarlanır. Sertifika kontrolünü kapatma.
 

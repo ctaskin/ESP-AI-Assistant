@@ -1,4 +1,7 @@
-
 build/
 
 managed_components/
+
+# Kart/anahtar ayarlari kisiye ozeldir; sdkconfig.defaults ile uretilir.
+sdkconfig
+sdkconfig.old
