@@ -16,6 +16,21 @@
 **Bas-konuş yok.** API'nin `commit` komutunu yerel sessizlik algılama tetikler.
 Bilgisayar/bridge açık kalmadan, kart Wi-Fi üzerinden doğrudan OpenAI'ye bağlanır.
 
+## Dinlemeye geçiş: iki yol
+
+**Ekrana dokun.** Boştayken ekrana bir kez dokunmak doğrudan dinleme moduna geçirir; gözler
+yeşile döner. Güvenilir yol budur — dokunmatik panel deterministiktir, uyandırma sözcüğü
+değildir. Dokunma yalnızca boştayken kabul edilir: Ceko düşünürken veya konuşurken kayıt
+tamponu ağ görevine ait olduğundan dokunuş yok sayılır ve seri loga düşer.
+
+Dokunmatik panel üretici referansındaki değerlerle sürülüyor: codec ile aynı I2C hattı
+(SDA 47 / SCL 48), adres `0x15`, reset GPIO 7. Açılışta panel yoklanır; log satırı
+`Touch panel answered at 0x15` ise panel yanıt veriyor demektir. `Touch panel silent`
+görüyorsan dokunmatik uyandırma çalışmaz. `menuconfig > Ceko > Start listening when the
+screen is touched` ile kapatılabilir.
+
+**"hey ceko" de.** Deneysel yol; aşağıdaki sınırlara bak.
+
 ## Önce bilmen gereken iki sınır
 
 - **“Hey ceko” deneysel:** Hazır/eğitilmiş Türkçe WakeNet modeli yok. MultiNet7 İngilizce
@@ -144,6 +159,30 @@ Desteklenmiyor. cJSON, IDF 6'da çekirdekten çıkarıldı ve `espressif/cjson` 
 bağımlılık; IDF 5.x'te aynı başlığı çekirdekteki `json` bileşeni de verdiği için çakışır.
 Kök `CMakeLists.txt` bu yüzden IDF 6'dan küçük sürümlerde derlemeyi durdurur.
 
+### Uyandırma çalışmıyorsa
+
+Seri monitör iki tanı satırı basar:
+
+```
+I (…) speech: Microphone peak level over 5 s: 42/100
+I (…) speech: MultiNet candidate id=1 prob=0.71 threshold=0.85 -> rejected
+```
+
+İlkini sırayla oku:
+
+1. **Tepe seviye sürekli 0** → mikrofon yolu ölü. Uyandırma yazımını veya eşiği değiştirme;
+   önce codec, I2S slot ve kazancı doğrula: `menuconfig > Ceko > Use right I2S microphone
+   slot` ile slotu değiştirmeyi ve `Microphone gain dB` değerini artırmayı dene.
+2. **Tepe seviye konuşurken yükseliyor ama hiç `MultiNet candidate` satırı yok** → ses
+   geliyor, MultiNet hiçbir adayı yakalamıyor. Yazım sorunu: `Experimental MultiNet spelling
+   for hey ceko` değerini değiştirip dene (model İngilizce MultiNet7'dir, Türkçe telaffuz
+   için yazım deneme gerektirir).
+3. **`rejected` satırları görünüyor** → doğru duyuluyor ama eşiğin altında. `Wake confidence
+   percent` değerini kademeli düşür; yanlış uyanmaları da kaydet.
+
+Dokunmatik uyandırma çalışıyor ama sözcük çalışmıyorsa, mikrofon–API–hoparlör zincirinin
+tamamı sağlam demektir ve sorun yalnızca uyandırma tanımadadır.
+
 ## Ayarlar
 
 | Ayar | Varsayılan | Amaç |
@@ -175,6 +214,7 @@ Yanlış uyandırma sonrası gerçek konuşma algılanırsa o kayıt API'ye gön
 |---|---|
 | `main/board.c` | Güç, ES8311 ve I2S ses sürücüsü |
 | `main/face.c` | AMOLED, LVGL 9, göz ve ağız animasyonu |
+| `main/touch.c` | Dokunmatik panel, dokununca dinlemeye geçiş |
 | `main/speech.c` | Yerel AFE, MultiNet, uyandırma ve kayıt |
 | `main/realtime.c` | OpenAI WebSocket, ses kuyruğu, hata ve zaman aşımı |
 | `main/capture_gate.c` | Konuşma/sessizlik ve kayıt süresi sınırları |

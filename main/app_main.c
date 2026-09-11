@@ -21,6 +21,10 @@ static SemaphoreHandle_t status_lock;
 static char status[80] = "Basliyorum";
 void ceko_state_set(ceko_state_t s) { atomic_store(&state, s); }
 ceko_state_t ceko_state_get(void) { return atomic_load(&state); }
+bool ceko_state_try_listen(void) {
+    int expected = CEKO_IDLE;
+    return atomic_compare_exchange_strong(&state, &expected, CEKO_LISTEN);
+}
 void ceko_level_set(int n) { atomic_store(&level, n < 0 ? 0 : n > 100 ? 100 : n); }
 int ceko_level_get(void) { return atomic_load(&level); }
 bool ceko_wifi_ready(void) { return atomic_load(&online); }
@@ -90,6 +94,9 @@ void app_main(void) {
         return;
     }
     board_audio_init();
+#ifdef CONFIG_CEKO_TOUCH_WAKE
+    touch_start();
+#endif
     wifi_init();
     realtime_start();
     speech_start();

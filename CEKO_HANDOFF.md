@@ -32,6 +32,7 @@ Başka bilgisayara/oturuma geçerken ZIP ve bu belge birlikte aktarılmalı. Yuk
 | `main/app_main.c`, `main/ceko.h` | Başlangıç, Wi-Fi/NTP, ortak durum ve arayüzler |
 | `main/board.c` | Güç, ES8311, I2C/I2S mikrofon ve hoparlör |
 | `main/face.c` | SH8601 AMOLED, LVGL 9, göz/ağız animasyonu |
+| `main/touch.c` | Dokunmatik panel, dokununca dinlemeye geçiş |
 | `main/speech.c` | AFE/VAD, MultiNet, uyandırma ve kayıt |
 | `main/capture_gate.c` | Konuşma bitişi, boş/uzun kayıt sınırları |
 | `main/realtime.c` | TLS WebSocket oturumu, ses gönderme/çalma, hata yönetimi |
@@ -51,6 +52,8 @@ Başka bilgisayara/oturuma geçerken ZIP ve bu belge birlikte aktarılmalı. Yuk
 5. Bu noktada yeni WebSocket oturumu açılır; kayıt 16 kHz'den 24 kHz'e çevrilerek gönderilir. Yerel bitiş kararı `input_audio_buffer.commit` ve `response.create` akışını tetikler.
 6. Gelen 24 kHz PCM ses 16 kHz'e çevrilip hoparlörde çalınır. `SPEAK` sırasında ağız, çalınan sesin RMS şiddetine göre hareket eder; fonem eşlemesi değildir.
 7. Yanıt/çalma tamamlanınca oturum kapanır. 600 ms akustik bekleme ardından yeniden `IDLE` olur.
+
+Dinlemeye ikinci giriş yolu ekrana dokunmaktır; yalnızca `IDLE` durumunda kabul edilir ve durum geçişi karşılaştır-değiştir ile yapılır, böylece tek kayıt tamponunun sahiplik kuralı korunur.
 
 Her uyandırma **tek soru–tek cevap** içindir. Sohbet geçmişi tutulmaz. Yanıt sırasında mikrofon verisi tüketilip atılır; söz kesme ve tam çift yönlü konuşma yoktur. AEC kapalıdır.
 
@@ -81,8 +84,11 @@ Aşağıdakiler mevcut kaynak kodundaki pin eşlemeleridir; üretici referansın
 | Ses yükselteci PA | 46 |
 | Ekran CS / CLK / RESET | 10 / 11 / 8 |
 | Ekran QSPI D0 / D1 / D2 / D3 | 12 / 13 / 14 / 15 |
+| Dokunmatik reset / kesme | 7 / 6 |
 
-Hoparlörün pakette bulunması, konektör uyumu ve empedansı fiziksel kart/şema üzerinden teyit edilmeli. Dokunmatik kullanıcı etkileşimi bu sürümde uygulanmadı.
+Hoparlörün pakette bulunması, konektör uyumu ve empedansı fiziksel kart/şema üzerinden teyit edilmeli.
+
+Dokunmatik panel artık kullanılıyor: ekrana dokunmak boştayken dinleme moduna geçiriyor. Pinler üretici referansından (`Example/ESP-IDF/.../main/user_config.h` ve `components/lcd_touch_bsp`) alındı: codec ile aynı I2C hattı, adres `0x15`, reset GPIO 7, kesme GPIO 6 (üretici sürücüsü gibi biz de yoklama yapıyoruz, kesmeyi kullanmıyoruz). Fiziksel kartta doğrulanmadı.
 
 Derleme hedefi ESP-IDF **6.1**, ESP32-S3. Manifest aralığı `>=6.0.0,<7.0.0`.
 

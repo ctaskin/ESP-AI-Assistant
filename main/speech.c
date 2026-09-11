@@ -1,4 +1,5 @@
 #include "ceko.h"
+#include "audio_math.h"
 #include "capture_gate.h"
 #include <string.h>
 #include "sdkconfig.h"
@@ -6,6 +7,7 @@
 #include "freertos/task.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "esp_afe_sr_iface.h"
 #include "esp_afe_sr_models.h"
 #include "esp_mn_models.h"
@@ -22,6 +24,8 @@ static void microphone_task(void *arg) {
     int n = afe->get_feed_chunksize(afe_data);
     int16_t *buf = heap_caps_malloc(n * sizeof(int16_t), MALLOC_CAP_INTERNAL);
     assert(buf);
+    int peak = 0;
+    int64_t next_report = 0;
     for (;;) {
         if (board_audio_read(buf, n) != ESP_OK) {
             ceko_state_set(CEKO_ERROR); ceko_status_set("Mikrofon hatasi");
@@ -30,6 +34,18 @@ static void microphone_task(void *arg) {
             continue;
         }
         afe->feed(afe_data, buf);
+        // Bring-up diagnostic. If this stays at 0 the microphone path is dead and
+        // no wake word can match, whatever the spelling or threshold is; check
+        // codec, I2S slot and gain before touching wake settings.
+        int level = audio_level(buf, n);
+        if (level > peak) peak = level;
+        int64_t now = esp_timer_get_time();
+        if (now >= next_report) {
+            if (next_report && ceko_state_get() == CEKO_IDLE)
+                ESP_LOGI("speech", "Microphone peak level over 5 s: %d/100", peak);
+            peak = 0;
+            next_report = now + 5000000;
+        }
     }
 }
 
@@ -69,6 +85,13 @@ static void recognition_task(void *arg) {
                     esp_mn_results_t *hits = mn->get_results(mn_data);
                     bool hit = hits && hits->num > 0 && hits->command_id[0] == 1 &&
                         hits->prob[0] >= CONFIG_CEKO_WAKE_CONFIDENCE / 100.0f;
+                    // Report near misses too: a rejected candidate means MultiNet
+                    // hears the phrase but not confidently enough, which is a
+                    // different problem from hearing nothing at all.
+                    if (hits && hits->num > 0)
+                        ESP_LOGI("speech", "MultiNet candidate id=%d prob=%.2f threshold=%.2f -> %s",
+                                 hits->command_id[0], (double)hits->prob[0],
+                                 CONFIG_CEKO_WAKE_CONFIDENCE / 100.0, hit ? "wake" : "rejected");
                     mn->clean(mn_data);
                     if (hit) {
                         ceko_status_set("Dinliyorum"); ceko_state_set(CEKO_LISTEN);

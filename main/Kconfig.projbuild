@@ -40,6 +40,13 @@ config CEKO_MIC_GAIN
 config CEKO_MIC_RIGHT_SLOT
     bool "Use right I2S microphone slot (normally left)"
     default n
+config CEKO_TOUCH_WAKE
+    bool "Start listening when the screen is touched"
+    default y
+    help
+      Adds a second way into the listening state next to the experimental
+      MultiNet wake phrase. A tap is only accepted while idle; during THINK
+      and SPEAK the recording buffer belongs to the network task.
 config CEKO_DISPLAY_ROTATE_180
     bool "Rotate display 180 degrees (vendor orientation)"
     default y
