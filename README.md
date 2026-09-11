@@ -117,7 +117,22 @@ Refusing to automatically delete files in this directory.
 ```
 
 `set-target` kendi bağımlılığı olarak `fullclean` çağırdığı için aynı hata `idf.py set-target`
-sırasında da çıkar. Çözümü `build/` dizinini elle silmektir.
+sırasında da çıkar. VS Code ESP-IDF eklentisi de aynı durumda kendi uyarısını verir:
+`There is no CMakeCache.txt. Please try to delete the build directory manually.`
+
+Nedeni: cmake yapılandırması hata verdiğinde `idf.py`, yarım kalmış bir önbellek bırakmamak
+için `build/CMakeCache.txt` dosyasını **bilerek siler**
+(`tools/idf_py_actions/tools.py`, "don't allow partially valid CMakeCache.txt files").
+Geriye dolu ama önbelleksiz bir `build/` kalır ve `fullclean` tam olarak bunu silmeyi
+reddeder — kendini besleyen bir kilitlenme.
+
+Tek çıkış yolu dizini **terminalden elle silmektir**; eklentinin düğmeleri bunu yapmaz:
+
+```sh
+cd /path/to/ESP-AI-Assistant
+rm -rf build sdkconfig sdkconfig.old
+idf.py set-target esp32s3
+```
 
 `sdkconfig` üretilen bir dosyadır ve repoda tutulmaz; hedefi ve anahtarları taşıdığı için
 depoya girerse bir sonraki derlemeye yanlış hedefi dayatır. `dependencies.lock` IDF 6 geçişinde
