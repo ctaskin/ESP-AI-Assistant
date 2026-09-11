@@ -27,3 +27,16 @@ if(ceko_idf_major GREATER_EQUAL 6)
         endif()
     endforeach()
 endif()
+
+# api.openai.com ve generativelanguage.googleapis.com zincirleri, GTS Root R4'un
+# GlobalSign Root CA tarafindan capraz imzalanmis surumuyle bitiyor. O eski kok
+# artik Mozilla listesinde ve ESP sertifika paketinde yok; bu secenek kapaliyken
+# paket "No matching trusted root certificate found" diyip el sikismayi kesiyor.
+# sdkconfig.defaults bunu aciyor, ancak mevcut bir sdkconfig defaults'u ezer.
+if(NOT CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_CROSS_SIGNED_VERIFY)
+    message(WARNING
+        "CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_CROSS_SIGNED_VERIFY kapali. "
+        "TLS el sikismasi 'No matching trusted root certificate found' ile duracak. "
+        "Acmak icin: menuconfig > Component config > mbedTLS > Certificate Bundle, "
+        "veya sdkconfig icindeki satiri elle =y yap.")
+endif()

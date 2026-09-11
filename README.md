@@ -102,19 +102,34 @@ idf.py build
 ```
 
 **`esp-x509-crt-bundle: No matching trusted root certificate found`**
-Sunucu, kök sertifikası pakette doğrudan bulunmayan çapraz imzalı (cross-signed) bir zincir
-gönderiyor. `sdkconfig.defaults` artık
-`CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_CROSS_SIGNED_VERIFY=y` içeriyor; bu seçenek IDF'de
-varsayılan olarak kapalıdır. Ayar değişikliği için yeniden derlemen yeterli.
+`api.openai.com` zinciri şöyle bitiyor:
 
-Sorun sürerse zinciri kendi bilgisayarından bak:
-
-```sh
-openssl s_client -showcerts -servername api.openai.com -connect api.openai.com:443 </dev/null 2>/dev/null | grep -E "^(s|i):"
+```
+api.openai.com  <-  GTS WE1  <-  GTS Root R4  <-  GlobalSign Root CA
 ```
 
-Kök CA'yı `certs/` klasörüne PEM olarak koyup `menuconfig > Component config > mbedTLS >
-Certificate Bundle > Add custom certificates to the default bundle` ile eklemek kesin çözümdür.
+Son halka çapraz imza: sunucu, `GTS Root R4`'ün `GlobalSign Root CA` tarafından imzalanmış
+sürümünü gönderiyor. O eski kök (1998 tarihli R1) Mozilla listesinden çıkarıldığı için ESP
+sertifika paketinde **yok**; `GTS Root R4` ise **var**. Seçenek kapalıyken paket yalnızca
+zincirin son sertifikasının vericisine bakar, onu bulamaz ve el sıkışmayı keser.
+`CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_CROSS_SIGNED_VERIFY=y` açıldığında mbedTLS her seviyede
+paketten aday kök sorar, `GTS Root R4`'ü bulur ve fazladan çapraz halkayı yok sayar.
+Bu seçenek ESP-IDF'de varsayılan olarak **kapalıdır**; `sdkconfig.defaults` açıyor.
+
+`GlobalSign Root CA`'yı elle eklemeye çalışma: dağıtımdan çıkarılmış bir kökü yeniden
+güvenilir yapmak, çözümü değil güvenlik zafiyetini eklemek olur.
+
+**Önemli:** `sdkconfig` zaten varsa `sdkconfig.defaults` onu ezmez. Mevcut kurulumda ayarı
+şöyle aç (Wi-Fi ve anahtar ayarların korunur):
+
+```sh
+sed -i '' 's/^# CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_CROSS_SIGNED_VERIFY is not set$/CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_CROSS_SIGNED_VERIFY=y/' sdkconfig
+grep CROSS_SIGNED sdkconfig      # =y görmelisin
+idf.py build
+```
+
+Aynısını `idf.py menuconfig > Component config > mbedTLS > Certificate Bundle` altından da
+yapabilirsin. Derleme başında bu uyarı görünürse ayar hâlâ kapalıdır.
 
 **`task_wdt: ... IDLE1 (CPU 1)` ve `Ringbuffer of AFE(FEED) is full`**
 Komut tanıyıcı çekirdek 1'i dolduruyor. Artık yalnızca konuşma sırasında çalışıyor ve
@@ -138,6 +153,12 @@ Başka bir managed bileşen de aynı `driver/...` hatasını verirse, adını k�
 ES8311 mikrofon/ses devresi kartta bulunur. Kartın kendi hoparlör konektörüne uygun hoparlör
 bağlı olmalı. Paketinde hoparlör yoksa uygun parça gerekir; konektör ve yük empedansı kartın
 şeması/ürün revizyonundan kontrol edilmelidir. GPIO'ya doğrudan hoparlör bağlanmaz.
+
+### menuconfig'de yaptığın ayarlar
+
+`menuconfig` değişiklikleri yalnızca `sdkconfig` dosyasına yazılır; o dosya repoda izlenmiyor
+ve `idf.py set-target` ile silinir. **Kalıcı olması gereken her ayar `sdkconfig.defaults`
+içine de yazılmalı.** Aksi halde ayar bir sonraki temiz kurulumda sessizce kaybolur.
 
 ### API anahtarının yeri
 

@@ -25,11 +25,17 @@
 
 ## İlk fiziksel çalıştırmadan çıkan iki hata (seri log ile)
 
-- **TLS:** `esp-x509-crt-bundle: No matching trusted root certificate found` →
-  `api.openai.com` el sıkışması başarısız. IDF'de varsayılan kapalı olan
-  `CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_CROSS_SIGNED_VERIFY` açıldı. **Bu düzeltmenin
-  gerçekten yeterli olduğu doğrulanmadı**; sunucunun zinciri ölçülmedi. Yetmezse kök
-  CA'yı özel pakete eklemek gerekir.
+- **TLS:** `esp-x509-crt-bundle: No matching trusted root certificate found`. Sunucu zinciri
+  ölçüldü: `api.openai.com <- GTS WE1 <- GTS Root R4 <- GlobalSign Root CA`. ESP-IDF 6.1
+  paketindeki (`components/mbedtls/esp_crt_bundle/cacrt_all.pem`, 145 sertifika)
+  `GTS Root R4` var, çapraz imzayı atan eski `GlobalSign Root CA` yok. Seçenek kapalıyken
+  paket sahte bir CA zinciri kurup yalnızca son sertifikanın vericisini arıyor; açıkken
+  `mbedtls_ssl_conf_ca_cb` ile her seviyede aday kök sorulup `GTS Root R4` bulunuyor.
+  `CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_CROSS_SIGNED_VERIFY=y` yapıldı. Kart üzerinde
+  el sıkışmanın geçtiği **henüz doğrulanmadı**.
+- **Kaybolan ayar:** Bu hata daha önce menuconfig ile çözülmüştü, ancak ayar yalnızca
+  izlenmeyen `sdkconfig` dosyasındaydı; hedef düzeltmesi için o dosya silinince geri geldi.
+  Ayar artık `sdkconfig.defaults` içinde ve kapalıysa derleme başında uyarı veriliyor.
 - **Watchdog:** `task_wdt: IDLE1 (CPU 1)` ve `AFE(FEED) ringbuffer full` → MultiNet7 her
   çerçevede çalıştığı için çekirdek 1 doluyor ve tanıma gerçek zamanın gerisine düşüyordu.
   Tanıyıcı artık yerel VAD konuşma duyduğunda çalışıyor; 300 ms ön tampon ile ilk hece
