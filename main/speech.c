@@ -1,5 +1,6 @@
 #include "ceko.h"
 #include "capture_gate.h"
+#include "wake_gate.h"
 #include <string.h>
 #include "sdkconfig.h"
 #include "freertos/FreeRTOS.h"
@@ -12,11 +13,20 @@
 #include "esp_mn_speech_commands.h"
 #include "model_path.h"
 
+// 300 ms of speech before the VAD opens, and 1 s of silence before the
+// recognizer is put back to sleep.
+#define WAKE_PREROLL_SAMPLES 4800
+#define WAKE_HANGOVER_SAMPLES 16000
+
 static const esp_afe_sr_iface_t *afe;
 static esp_afe_sr_data_t *afe_data;
 static const esp_mn_iface_t *mn;
 static model_iface_data_t *mn_data;
 static int16_t *recording;
+static wake_gate_t wake;
+static int16_t *mn_buf;
+static int mn_size;
+static size_t mn_filled;
 
 static void microphone_task(void *arg) {
     int n = afe->get_feed_chunksize(afe_data);
@@ -33,12 +43,33 @@ static void microphone_task(void *arg) {
     }
 }
 
+// Feeds the recognizer in its own chunk size. Returns true on the wake phrase.
+static bool mn_feed(const int16_t *pcm, size_t n) {
+    for (size_t pos = 0; pos < n;) {
+        size_t take = (size_t)mn_size - mn_filled;
+        if (take > n-pos) take = n-pos;
+        memcpy(mn_buf+mn_filled, pcm+pos, take*2);
+        mn_filled += take; pos += take;
+        if (mn_filled != (size_t)mn_size) continue;
+        mn_filled = 0;
+        esp_mn_state_t result = mn->detect(mn_data, mn_buf);
+        if (result == ESP_MN_STATE_DETECTED) {
+            esp_mn_results_t *hits = mn->get_results(mn_data);
+            bool hit = hits && hits->num > 0 && hits->command_id[0] == 1 &&
+                hits->prob[0] >= CONFIG_CEKO_WAKE_CONFIDENCE / 100.0f;
+            mn->clean(mn_data);
+            if (hit) return true;
+        } else if (result == ESP_MN_STATE_TIMEOUT) mn->clean(mn_data);
+    }
+    return false;
+}
+
 static void recognition_task(void *arg) {
     const size_t capacity = CONFIG_CEKO_MAX_RECORD_SECONDS * 16000U;
-    int mn_size = mn->get_samp_chunksize(mn_data);
-    int16_t *mn_buf = heap_caps_malloc(mn_size*2, MALLOC_CAP_SPIRAM);
+    mn_size = mn->get_samp_chunksize(mn_data);
+    mn_buf = heap_caps_malloc(mn_size*2, MALLOC_CAP_SPIRAM);
     assert(mn_buf);
-    size_t filled = 0, used = 0;
+    size_t used = 0;
     capture_gate_t gate;
     ceko_state_t prev = CEKO_BOOT;
     for (;;) {
@@ -46,7 +77,7 @@ static void recognition_task(void *arg) {
         if (!r || r->ret_value != ESP_OK || r->data_size <= 0) continue;
         ceko_state_t state = ceko_state_get();
         if (state != prev) {
-            mn->clean(mn_data); filled = 0;
+            mn->clean(mn_data); mn_filled = 0; wake_gate_reset(&wake);
             if (state == CEKO_LISTEN) {
                 used = 0;
                 capture_gate_init(&gate, CONFIG_CEKO_MAX_RECORD_SECONDS, CONFIG_CEKO_SILENCE_MS);
@@ -55,27 +86,30 @@ static void recognition_task(void *arg) {
         }
         size_t n = r->data_size/2;
         if (state == CEKO_IDLE) {
-            // Experimental command spotting: continuously reset MultiNet timeouts.
-            // This is not a trained Turkish WakeNet model and needs on-device tuning.
-            for (size_t pos=0; pos<n;) {
-                size_t take = (size_t)mn_size-filled;
-                if (take > n-pos) take = n-pos;
-                memcpy(mn_buf+filled, r->data+pos, take*2);
-                filled += take; pos += take;
-                if (filled != (size_t)mn_size) continue;
-                filled = 0;
-                esp_mn_state_t result = mn->detect(mn_data, mn_buf);
-                if (result == ESP_MN_STATE_DETECTED) {
-                    esp_mn_results_t *hits = mn->get_results(mn_data);
-                    bool hit = hits && hits->num > 0 && hits->command_id[0] == 1 &&
-                        hits->prob[0] >= CONFIG_CEKO_WAKE_CONFIDENCE / 100.0f;
-                    mn->clean(mn_data);
-                    if (hit) {
-                        ceko_status_set("Dinliyorum"); ceko_state_set(CEKO_LISTEN);
-                        ESP_LOGI("speech", "Wake detected; capture gate opened");
-                        break; // Never send the wake frame itself.
-                    }
-                } else if (result == ESP_MN_STATE_TIMEOUT) mn->clean(mn_data);
+            // Experimental command spotting. This is not a trained Turkish
+            // WakeNet model; it is MultiNet driven by the local VAD so it does
+            // not run during silence, and it needs on-device tuning.
+            bool hit = false;
+            switch (wake_gate_step(&wake, r->data, n, r->vad_state == VAD_SPEECH)) {
+            case WAKE_FLUSH:
+                hit = mn_feed(wake.pcm, wake.fill);
+                wake_gate_consumed(&wake);
+                if (!hit) hit = mn_feed(r->data, n);
+                break;
+            case WAKE_FEED:
+                hit = mn_feed(r->data, n);
+                break;
+            case WAKE_STOP:
+                mn->clean(mn_data); mn_filled = 0;
+                break;
+            case WAKE_SKIP:
+                break;
+            }
+            if (hit) {
+                // Never send the wake frame itself.
+                mn->clean(mn_data); mn_filled = 0; wake_gate_reset(&wake);
+                ceko_status_set("Dinliyorum"); ceko_state_set(CEKO_LISTEN);
+                ESP_LOGI("speech", "Wake detected; capture gate opened");
             }
         } else if (state == CEKO_LISTEN) {
             size_t take = n < capacity-used ? n : capacity-used;
@@ -129,6 +163,9 @@ void speech_start(void) {
     afe_config_free(cfg);
     recording = heap_caps_malloc(CONFIG_CEKO_MAX_RECORD_SECONDS*16000U*2, MALLOC_CAP_SPIRAM);
     assert(recording);
+    int16_t *preroll = heap_caps_malloc(WAKE_PREROLL_SAMPLES*2, MALLOC_CAP_SPIRAM);
+    assert(preroll);
+    wake_gate_init(&wake, preroll, WAKE_PREROLL_SAMPLES, WAKE_HANGOVER_SAMPLES);
     ESP_LOGI("speech", "Ready: model=%s, free internal=%u PSRAM=%u bytes", name,
              (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
              (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));

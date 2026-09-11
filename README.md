@@ -7,6 +7,8 @@
 
 1. Siyah ekranda turkuaz iki göz aralıklarla kırpılır, hafifçe etrafa bakar.
 2. Beklerken ses yalnızca cihazdaki AFE ve deneysel komut tanıyıcıda işlenir; internete gönderilmez.
+   Komut tanıyıcı sürekli çalışmaz: yalnızca yerel VAD konuşma duyduğunda devreye girer ve
+   öncesindeki 300 ms tamponu da modele verilir.
 3. “Hey ceko” algılanınca gözler büyür ve yeşile döner. `Dinliyorum` görünür.
 4. Bundan sonraki konuşma alınır; 1 saniyelik sessizlikte kayıt tamamlanır.
 5. Ses, **açılışta kurulmuş ve açık tutulan** WebSocket oturumundan gönderilir.
@@ -32,6 +34,9 @@ adresi girmek gerekir. Karşılaştırma, fiyatlar ve gerekçe: `docs/PROVIDERS.
   Türkçe /ceko/ telaffuzunun tanınması ve yanlış uyanma oranı fiziksel kartta doğrulanmadı.
   `menuconfig > Ceko` altında yazım ve güven eşiği değiştirilebilir. Güvenilir ürün için özel
   wake-word modeli eğitimi/entegrasyonu gerekir. Alternatif ifade sessizce devreye sokulmaz.
+  MultiNet7 bu yongada gerçek zamanlı olarak *sürekli* çalışamıyor (çekirdek 1 doluyor ve
+  AFE tamponu taşıyor), bu yüzden yalnızca konuşma duyulduğunda çalıştırılıyor. Sessiz
+  odada işlemci yükü yok denecek kadar az; konuşurken çekirdek 1 yine doluyor.
 - **Yarı çift yönlü:** Ceko cevap verirken mikrofon işlenip atılır. Kendi sesine uyanmaz;
   fakat konuşurken sözünü kesme yoktur. Bu sürümde akustik yankı giderme kapalıdır.
 - **Gemini yolu doğrulanmadı:** Gemini Live mesaj alanları dokümantasyondan yazıldı,
@@ -95,6 +100,27 @@ rm -rf build managed_components dependencies.lock sdkconfig
 idf.py set-target esp32s3
 idf.py build
 ```
+
+**`esp-x509-crt-bundle: No matching trusted root certificate found`**
+Sunucu, kök sertifikası pakette doğrudan bulunmayan çapraz imzalı (cross-signed) bir zincir
+gönderiyor. `sdkconfig.defaults` artık
+`CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_CROSS_SIGNED_VERIFY=y` içeriyor; bu seçenek IDF'de
+varsayılan olarak kapalıdır. Ayar değişikliği için yeniden derlemen yeterli.
+
+Sorun sürerse zinciri kendi bilgisayarından bak:
+
+```sh
+openssl s_client -showcerts -servername api.openai.com -connect api.openai.com:443 </dev/null 2>/dev/null | grep -E "^(s|i):"
+```
+
+Kök CA'yı `certs/` klasörüne PEM olarak koyup `menuconfig > Component config > mbedTLS >
+Certificate Bundle > Add custom certificates to the default bundle` ile eklemek kesin çözümdür.
+
+**`task_wdt: ... IDLE1 (CPU 1)` ve `Ringbuffer of AFE(FEED) is full`**
+Komut tanıyıcı çekirdek 1'i dolduruyor. Artık yalnızca konuşma sırasında çalışıyor ve
+`CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU1=n` ile bu çekirdekteki boşta görev denetimi
+kapatıldı (Espressif'in konuşma örnekleri de böyle yapıyor). Uyarı konuşma sırasında yine
+görünürse tanıma hâlâ gerçek zamanın gerisindedir; kalıcı çözüm WakeNet aşamasıdır.
 
 **`Hedef yonga 'esp32'`** Repoya daha önce `CONFIG_IDF_TARGET="esp32"` içeren bir
 `sdkconfig` girmişti ve derlemeyi yanlış yongaya yönlendiriyordu. Dosya artık
@@ -170,6 +196,7 @@ Yanlış uyandırma sonrası gerçek konuşma algılanırsa o kayıt API'ye gön
 | `main/session_policy.c` | Bağlan/yenile/geri çekil kararları |
 | `main/history.c` | Yeniden bağlanınca taşınan kısa konuşma özeti |
 | `main/capture_gate.c` | Konuşma/sessizlik ve kayıt süresi sınırları |
+| `main/wake_gate.c` | Komut tanıyıcıyı VAD'a bağlar, 300 ms ön tampon tutar |
 | `main/audio_math.c` | 16↔24 kHz FIR dönüşümü ve RMS |
 | `main/ws_message.c` | Sınırlı boyutlu parçalı WebSocket mesaj birleştirme |
 | `tests/test_core.c` | Donanımdan bağımsız sınır/akış testleri |

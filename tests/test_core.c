@@ -2,6 +2,7 @@
 #include "capture_gate.h"
 #include "history.h"
 #include "session_policy.h"
+#include "wake_gate.h"
 #include "ws_message.h"
 #include <assert.h>
 #include <math.h>
@@ -154,8 +155,52 @@ static void session_policy_tests(void) {
     session_policy_opened(&p, 0);
     assert(session_policy_poll(&p, UINT64_MAX-1, false, true) == SESSION_KEEP);
 }
+
+static void wake_gate_tests(void) {
+    int16_t store[8], chunk[4] = {1,2,3,4}, next[4] = {5,6,7,8};
+    wake_gate_t g;
+    wake_gate_init(&g, store, 8, 8);
+
+    // Silence only fills the pre-roll, and keeps the most recent samples.
+    assert(wake_gate_step(&g, chunk, 4, false) == WAKE_SKIP && g.fill == 4);
+    assert(wake_gate_step(&g, next, 4, false) == WAKE_SKIP && g.fill == 8);
+    assert(wake_gate_step(&g, chunk, 4, false) == WAKE_SKIP && g.fill == 8);
+    assert(store[0] == 5 && store[3] == 8 && store[4] == 1 && store[7] == 4);
+
+    // Speech replays the pre-roll once, then feeds chunk by chunk.
+    assert(wake_gate_step(&g, next, 4, true) == WAKE_FLUSH && g.fill == 8);
+    wake_gate_consumed(&g);
+    assert(g.fill == 0);
+    assert(wake_gate_step(&g, next, 4, true) == WAKE_FEED);
+
+    // Silence shorter than the hangover keeps the recognizer running.
+    assert(wake_gate_step(&g, next, 4, false) == WAKE_FEED);
+    assert(wake_gate_step(&g, next, 4, false) == WAKE_STOP);
+    assert(!g.running && g.fill == 0 && g.quiet == 0);
+    // After stopping, the next speech flushes a pre-roll again.
+    assert(wake_gate_step(&g, chunk, 4, false) == WAKE_SKIP);
+    assert(wake_gate_step(&g, next, 4, true) == WAKE_FLUSH && g.fill == 4);
+
+    // A chunk larger than the buffer keeps only its tail.
+    int16_t big[12];
+    for (int i = 0; i < 12; ++i) big[i] = (int16_t)(100+i);
+    wake_gate_init(&g, store, 8, 8);
+    assert(wake_gate_step(&g, big, 12, false) == WAKE_SKIP && g.fill == 8);
+    assert(store[0] == 104 && store[7] == 111);
+
+    // Speech resets the silence counter, so talking never times the gate out.
+    wake_gate_init(&g, store, 8, 8);
+    assert(wake_gate_step(&g, next, 4, true) == WAKE_FLUSH);
+    for (int i = 0; i < 10; ++i) {
+        assert(wake_gate_step(&g, next, 4, false) == WAKE_FEED);
+        assert(wake_gate_step(&g, next, 4, true) == WAKE_FEED);
+    }
+    wake_gate_reset(&g);
+    assert(!g.running && g.fill == 0);
+}
 int main(void) {
     gate_tests(); websocket_tests(); resampler_tests(); history_tests(); session_policy_tests();
+    wake_gate_tests();
     puts("PASS: capture gating, fragmented WebSocket assembly, streaming resampling, anti-aliasing, "
-         "audio level, conversation recap, session renew/backoff");
+         "audio level, conversation recap, session renew/backoff, VAD gated wake pre-roll");
 }

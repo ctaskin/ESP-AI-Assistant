@@ -23,6 +23,21 @@
 - Gecikme kazancı ölçülmedi; kalıcı oturumun uzun süreli bellek/bağlantı dayanıklılığı
   ve yeniden bağlanma davranışı fiziksel kartta denenmedi.
 
+## İlk fiziksel çalıştırmadan çıkan iki hata (seri log ile)
+
+- **TLS:** `esp-x509-crt-bundle: No matching trusted root certificate found` →
+  `api.openai.com` el sıkışması başarısız. IDF'de varsayılan kapalı olan
+  `CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_CROSS_SIGNED_VERIFY` açıldı. **Bu düzeltmenin
+  gerçekten yeterli olduğu doğrulanmadı**; sunucunun zinciri ölçülmedi. Yetmezse kök
+  CA'yı özel pakete eklemek gerekir.
+- **Watchdog:** `task_wdt: IDLE1 (CPU 1)` ve `AFE(FEED) ringbuffer full` → MultiNet7 her
+  çerçevede çalıştığı için çekirdek 1 doluyor ve tanıma gerçek zamanın gerisine düşüyordu.
+  Tanıyıcı artık yerel VAD konuşma duyduğunda çalışıyor; 300 ms ön tampon ile ilk hece
+  korunuyor, 1 saniye sessizlikten sonra duruyor. `wake_gate` modülü host testleriyle
+  kapsandı. Gerçek algılama başarısı ve konuşma sırasındaki çekirdek yükü **ölçülmedi**.
+- Wi-Fi, NTP, ES8311/I2S başlatma, MultiNet model yüklemesi ve yüz görevleri logda
+  sorunsuz göründü. Ses giriş/çıkış kalitesi ve uyandırma başarısı hâlâ denenmedi.
+
 ## ESP-IDF 6.1 geçişi ve repoya girmiş yanlış derleme durumu
 
 Proje ESP-IDF **6.1** ile derleniyor (`.vscode/settings.json` ve `dependencies.lock`
