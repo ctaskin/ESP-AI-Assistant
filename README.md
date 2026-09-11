@@ -210,23 +210,40 @@ E (…) realtime: WebSocket error: type=1 http_status=0 tls_esp_err=ESP_ERR_MBED
 | `Kota veya hiz siniri (429)` | Bakiye veya hız sınırı |
 | `TLS: sertifika dogrulanamadi` | El sıkışma kök sertifikada düştü |
 
-**`TLS: sertifika dogrulanamadi` / `No matching trusted root certificate found`:** sunucunun
-gönderdiği zincirin en üstündeki sertifikanın vereni, ESP-IDF sertifika paketindeki 145 kök
-arasında yok. İki olasılık var ve hangisi olduğunu cihaz söyleyemez — **aynı ağdaki Mac'ten**
-bak:
+**`TLS: sertifika dogrulanamadi` / `No matching trusted root certificate found`:** mbedTLS,
+sunucunun gönderdiği zincirin en üstündeki sertifikanın **verenini** paketteki kökler arasında
+arar, bulamazsa bu hatayı verir.
+
+Kontrol edildi: `api.openai.com` yaprak sertifikasını Google Trust Services **WE1** ara
+sertifikası imzalıyor ve onun kökü olan **GTS Root R1–R4'ün dördü de** ESP-IDF 6.1 paketinde
+mevcut. Yani kök eksikliği değil. Geriye iki açıklama kalıyor:
+
+**A — Ağ TLS'i araya giriyor.** Router veya ISP kendi kökünü kullanıyorsa zincirin tepesi hiçbir
+genel pakette bulunmaz. En hızlı test, yeniden derleme gerektirmez: **telefon hotspot'una bağlan
+ve tekrar dene.** Hotspot'ta çalışıyorsa sebep budur.
+
+**B — Sunucu ara sertifikayı göndermiyor.** O zaman zincirin tepesi yaprak sertifika olarak kalır
+ve mbedTLS `WE1`'i pakette arar; orada bir ara sertifika olmadığı için bulamaz. Tarayıcılar eksik
+arayı AIA ile indirir, mbedTLS indirmez.
+
+Hangisi olduğunu ayırmak için **aynı ağdaki Mac'ten** tam zinciri dök:
 
 ```sh
 openssl s_client -showcerts -servername api.openai.com \
-  -connect api.openai.com:443 </dev/null 2>/dev/null | grep -E "^(depth|verify|subject|issuer)"
+  -connect api.openai.com:443 </dev/null 2>&1 | sed -n '/Certificate chain/,/^---/p'
+openssl s_client -servername api.openai.com \
+  -connect api.openai.com:443 </dev/null 2>&1 | grep -E "Verify return code|verify error"
 ```
 
-- Zincir tanıdık bir genel kökle bitiyorsa (DigiCert, ISRG, GlobalSign gibi) paket eksik
-  demektir. O kökü PEM olarak `certs/` altına koy ve
-  `menuconfig > Component config > mbedTLS > Certificate Bundle > Add custom certificates to
-  the default bundle` seçeneğini açıp yolu `certs` yap.
-- Zincirin tepesinde kurum/router adı taşıyan bir kök görüyorsan ağ TLS'i araya giriyor
-  demektir. O ağda bu cihaz OpenAI'a bağlanamaz; başka bir ağ (örneğin telefon hotspot'u)
-  ile dene.
+- Listede yalnızca `0 s:CN = api.openai.com` varsa → **B**. `-showcerts` çıktısındaki PEM
+  bloğunu ya da `pki.goog` üzerinden indirilen WE1 sertifikasını `certs/` altına koy ve
+  `certs/README.md`'deki menuconfig adımlarını uygula.
+- `1 s:... WE1` satırı da varsa ve cihaz yine de düşüyorsa → **A**. Zincirin tepesindeki ada
+  bak; kurum veya router adı görüyorsan o ağda bu cihaz OpenAI'a bağlanamaz.
+
+Cihazdan daha fazla ayrıntı gerekirse `menuconfig > Component config > ESP-TLS / mbedTLS`
+altında mbedTLS hata ayıklamasını açmak el sıkışma sırasında karşı tarafın zincirini seri loga
+bastırır. Çok ayrıntılıdır, yalnızca teşhis için aç.
 
 Dokunmatik uyandırma çalışıyor ama sözcük çalışmıyorsa, mikrofon ve kayıt zinciri sağlam
 demektir; bağlantı hatası alıyorsan sorun uyandırmada değil ağ/TLS tarafındadır.
