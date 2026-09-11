@@ -1,7 +1,7 @@
 # Ceko v0.1 — ESP-IDF sesli masaüstü asistanı
 
 **Kart:** Waveshare ESP32-S3-Touch-AMOLED-1.32, 466×466, 8 MB Flash / 8 MB PSRAM, ES8311.
-**Hedef:** ESP-IDF 5.5.2; Arduino kullanılmaz. Repo oluşturulmadı.
+**Hedef:** ESP-IDF 6.1; Arduino kullanılmaz. Repo oluşturulmadı.
 
 ## Davranış
 
@@ -33,7 +33,7 @@ Uyandırma tanıyıcısı gecikmeli karar verebildiği için başlangıçta “h
 ## Kurulum — Mac / VS Code
 
 1. ZIP'i aç, `ceko` klasörünü VS Code ile aç.
-2. ESP-IDF eklentisinde **5.5.2** kurulumunu seç. `ESP-IDF: Open ESP-IDF Terminal` aç.
+2. ESP-IDF eklentisinde **6.1** kurulumunu seç. `ESP-IDF: Open ESP-IDF Terminal` aç.
 3. Proje klasöründe:
 
 ```sh
@@ -77,15 +77,19 @@ TLS sertifika kontrolü açıktır, sistem saati NTP ile ayarlanır. Sertifika k
 
 ### Derleme sorunları
 
-Derleme, ESP-IDF **5.5.2** ve **esp32s3** hedefi dışında bir ortamda başlatılırsa yapılandırma
-aşamasında açık bir hatayla durur. İki tipik durum:
+Proje ESP-IDF **6.1** ve **esp32s3** hedefiyle yapılandırılmıştır. Başka bir ortamda
+başlatılırsa derleme, yapılandırma aşamasında açık bir hatayla durur — eskiden olduğu gibi
+bağımlı bir bileşenin içinde yüzlerce adım sonra değil.
 
 **`driver/gpio.h: No such file or directory`** — `managed_components/espressif__esp_codec_dev`
-içinde derlerken görülür. Nedeni ESP-IDF 6.x kullanmaktır: IDF 6'da `driver` bileşeni parçalara
-ayrıldı ve gpio başlıklarını artık aktarmıyor, `esp_codec_dev` 1.3.x ise `driver/gpio.h`
-bekliyor. Çözüm, bileşeni yamalamak değil, 5.5.2 ortamını etkinleştirmektir. Manifest de
-`idf: ">=5.5.0,<6.0.0"` der; IDF 6.x'e geçiş, bağımlılıkların yeniden doğrulanmasını gerektiren
-ayrı bir iştir.
+içinde derlerken görülür. IDF 6'da eski `driver` bileşeni bölündü: artık yalnızca
+`i2c` / `touch_sensor` / `twai` başlıklarını aktarıyor, `esp_driver_gpio`'yu ise
+`PRIV_REQUIRES` olarak tutuyor. Hâlâ `REQUIRES driver` yazıp IDF 5 şemsiyesine güvenen
+üçüncü taraf bileşenler bu yüzden `driver/gpio.h`, `driver/i2s_std.h` ve
+`driver/i2c_master.h` bulamıyor. Kök `CMakeLists.txt` ayrılmış sürücü bileşenlerini ortak
+gereksinim listesine ekleyerek bu başlıkları geri veriyor; ayrıca `esp_codec_dev` sürüm
+aralığı `^1.3.4`'e genişletildi ki çözücü IDF 6'ya uygun daha yeni bir sürüm seçebilsin.
+Bağımlılıklar IDF 6'ya tümüyle geçtiğinde kökteki bu blok kaldırılabilir.
 
 **Yanlış hedef** — `set-target` çalıştırılmadan derlenirse hedef `esp32` kalabilir. `sdkconfig`
 varsa `sdkconfig.defaults` **uygulanmaz**, dolayısıyla oradaki `CONFIG_IDF_TARGET="esp32s3"`
@@ -105,9 +109,14 @@ idf.py build
 ```
 
 `sdkconfig` üretilen bir dosyadır ve repoda tutulmaz; hedefi ve anahtarları taşıdığı için
-depoya girerse bir sonraki derlemeye yanlış hedefi dayatır. `dependencies.lock` hedef veya IDF
-sürümü değişince bileşen yöneticisi tarafından yeniden çözülür; doğru ortamda oluşan sürümü
-işlemek gerekir.
+depoya girerse bir sonraki derlemeye yanlış hedefi dayatır. `dependencies.lock` IDF 6 geçişinde
+silindi; ilk başarılı derlemede yeniden üretilecek ve **oluşan kilit işlenmelidir**.
+
+### ESP-IDF 5.x'e dönüş
+
+Desteklenmiyor. cJSON, IDF 6'da çekirdekten çıkarıldı ve `espressif/cjson` olarak ayrı bir
+bağımlılık; IDF 5.x'te aynı başlığı çekirdekteki `json` bileşeni de verdiği için çakışır.
+Kök `CMakeLists.txt` bu yüzden IDF 6'dan küçük sürümlerde derlemeyi durdurur.
 
 ## Ayarlar
 

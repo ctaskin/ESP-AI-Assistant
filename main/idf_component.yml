@@ -1,6 +1,13 @@
 dependencies:
-  idf: ">=5.5.0,<6.0.0"
-  espressif/esp_codec_dev: "~1.3.4"
+  # ESP-IDF 6.x. IDF 5.x'e donulemez: cJSON asagida ayri bir bagimlilik olarak
+  # cozuluyor ve 5.x'te ayni basligi cekirdekteki "json" bileseni de veriyor.
+  idf: ">=6.0.0,<7.0.0"
+  # cJSON, IDF 6'da cekirdekten cikarildi; realtime.c dogrudan cJSON.h iceriyor.
+  espressif/cjson: "^1.7.19"
+  # Aralik 1.3.x'te kilitliydi. 1.3.x hala "REQUIRES driver" diyor ve IDF 6'nin
+  # bolunmus surucu bilesenleriyle derlenmiyor; cozucunun IDF 6'ya uygun daha
+  # yeni bir 1.x surumu secebilmesi icin ust sinir major surume tasindi.
+  espressif/esp_codec_dev: "^1.3.4"
   espressif/esp_lcd_sh8601: "^1.0.0"
   espressif/esp_websocket_client: "^1.5.0"
   espressif/esp-sr: "2.5.3"
