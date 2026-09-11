@@ -12,7 +12,10 @@ if(NOT IDF_TARGET STREQUAL "esp32s3")
     message(FATAL_ERROR
         "Ceko yalnizca esp32s3 hedefini destekler, mevcut hedef: '${IDF_TARGET}'. "
         "Proje kokundeki eski bir sdkconfig hedefi sabitliyor olabilir. Duzeltmek icin: "
-        "'idf.py fullclean && rm -f sdkconfig && idf.py set-target esp32s3'.")
+        "'rm -rf build sdkconfig && idf.py set-target esp32s3'. "
+        "Burada 'idf.py fullclean' kullanma: bu hata configure'u project() oncesinde "
+        "durdurdugu icin build/ gecerli bir CMakeCache.txt olmadan kalir ve fullclean "
+        "boyle bir dizini silmeyi reddeder.")
 endif()
 
 # Proje ESP-IDF 6.x'e tasindi: cJSON cekirdekten cikarildi ve eski "driver"

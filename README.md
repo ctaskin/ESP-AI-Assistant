@@ -101,12 +101,23 @@ ESP32 hedefinde SH8601 QSPI ekran ve MultiNet7 zaten çalışmaz.
 Her iki durumda da temiz başlangıç:
 
 ```sh
-idf.py fullclean
-rm -f sdkconfig
+rm -rf build sdkconfig sdkconfig.old
 idf.py set-target esp32s3
 idf.py menuconfig   # Ceko ayarlarını yeniden gir
 idf.py build
 ```
+
+**`idf.py fullclean` kullanma.** Yukarıdaki iki kontrol derlemeyi `project()` çağrısından
+önce durdurur; bu noktada `build/` geçerli bir `CMakeCache.txt` olmadan kalır ve `fullclean`
+böyle bir dizini silmeyi reddeder:
+
+```
+Directory '.../build' doesn't seem to be a CMake build directory.
+Refusing to automatically delete files in this directory.
+```
+
+`set-target` kendi bağımlılığı olarak `fullclean` çağırdığı için aynı hata `idf.py set-target`
+sırasında da çıkar. Çözümü `build/` dizinini elle silmektir.
 
 `sdkconfig` üretilen bir dosyadır ve repoda tutulmaz; hedefi ve anahtarları taşıdığı için
 depoya girerse bir sonraki derlemeye yanlış hedefi dayatır. `dependencies.lock` IDF 6 geçişinde
