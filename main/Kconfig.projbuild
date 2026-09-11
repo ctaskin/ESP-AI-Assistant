@@ -15,8 +15,15 @@ config CEKO_VOICE
     string "Voice"
     default "marin"
 config CEKO_WAKE_PHRASE
-    string "Experimental MultiNet spelling for hey ceko"
-    default "hey jeko"
+    string "Experimental MultiNet spellings for hey ceko (';' separated)"
+    default "hey jeko;hey jekko;hey jecko;hay jeko"
+    help
+      The MultiNet model is English, so Turkish "ceko" has to be written the
+      way an English grapheme-to-phoneme mapping would read it. Which spelling
+      works is an experiment, not something that can be derived on paper, so
+      several can be listed at once, separated by ';'. Every entry becomes its
+      own command and any of them wakes the device. The serial log names the
+      spelling that fired; once one is reliable, keep only that one.
 config CEKO_WAKE_CONFIDENCE
     int "Wake confidence percent"
     range 50 99

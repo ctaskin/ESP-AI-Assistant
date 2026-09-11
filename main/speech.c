@@ -83,7 +83,7 @@ static void recognition_task(void *arg) {
                 esp_mn_state_t result = mn->detect(mn_data, mn_buf);
                 if (result == ESP_MN_STATE_DETECTED) {
                     esp_mn_results_t *hits = mn->get_results(mn_data);
-                    bool hit = hits && hits->num > 0 && hits->command_id[0] == 1 &&
+                    bool hit = hits && hits->num > 0 && hits->command_id[0] >= 1 &&
                         hits->prob[0] >= CONFIG_CEKO_WAKE_CONFIDENCE / 100.0f;
                     // Report near misses too: a rejected candidate means MultiNet
                     // hears the phrase but not confidently enough, which is a
@@ -130,13 +130,29 @@ void speech_start(void) {
     assert(mn_data);
     ESP_ERROR_CHECK(esp_mn_commands_alloc(mn, mn_data));
     ESP_ERROR_CHECK(esp_mn_commands_clear());
-    ESP_ERROR_CHECK(esp_mn_commands_add(1, CONFIG_CEKO_WAKE_PHRASE));
+    // The MultiNet model is English. Which spelling comes closest to Turkish
+    // "ceko" cannot be derived on paper, so the setting holds a ';' separated
+    // list and every entry is registered as its own command. Any of them wakes,
+    // and the hit is logged so the working spelling can be kept.
+    char spellings[160];
+    snprintf(spellings, sizeof spellings, "%s", CONFIG_CEKO_WAKE_PHRASE);
+    int added = 0;
+    for (char *save = NULL, *tok = strtok_r(spellings, ";", &save); tok; tok = strtok_r(NULL, ";", &save)) {
+        while (*tok == ' ') ++tok;
+        size_t len = strlen(tok);
+        while (len && tok[len-1] == ' ') tok[--len] = 0;
+        if (!len) continue;
+        ESP_ERROR_CHECK(esp_mn_commands_add(++added, tok));
+        ESP_LOGI("speech", "Wake spelling %d: \"%s\"", added, tok);
+    }
     esp_mn_error_t *bad = esp_mn_commands_update();
-    if (bad && bad->num) {
-        ESP_LOGE("speech", "Wake spelling cannot be parsed: %s", CONFIG_CEKO_WAKE_PHRASE);
-        ceko_status_set("Uyandirma sozcugu hatasi"); ceko_state_set(CEKO_ERROR);
-        // Keep the error face visible rather than entering a reboot loop.
-        for (;;) vTaskDelay(pdMS_TO_TICKS(1000));
+    if (bad && bad->num)
+        ESP_LOGE("speech", "%d wake spelling(s) rejected by MultiNet; the rest stay active", bad->num);
+    if (!added || (bad && bad->num >= added)) {
+        // Never block here: touch wake and capture both depend on the tasks
+        // started below, and they must run even with no usable spelling.
+        ESP_LOGE("speech", "No usable wake spelling; only touch can start listening");
+        ceko_status_set("Uyandirma sozcugu hatasi");
     }
     mn->set_det_threshold(mn_data, CONFIG_CEKO_WAKE_CONFIDENCE/100.0f);
     afe_config_t *cfg = afe_config_init("M", models, AFE_TYPE_SR, AFE_MODE_LOW_COST);

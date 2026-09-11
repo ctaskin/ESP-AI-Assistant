@@ -122,10 +122,34 @@ static void on_json(const char *json) {
     }
     cJSON_Delete(root);
 }
+// Separate the failure classes the handoff asks for: a rejected key, a missing
+// model and a quota stop all arrive as an HTTP status on the upgrade handshake,
+// while a certificate problem never reaches HTTP at all.
+static void report_connection_error(const esp_websocket_error_codes_t *e) {
+    ESP_LOGE("realtime",
+        "WebSocket error: type=%d http_status=%d tls_esp_err=%s tls_stack_err=%d tls_cert_flags=0x%08x sock_errno=%d",
+        (int)e->error_type, e->esp_ws_handshake_status_code,
+        esp_err_to_name(e->esp_tls_last_esp_err), e->esp_tls_stack_err,
+        (unsigned)e->esp_tls_cert_verify_flags, e->esp_transport_sock_errno);
+    switch (e->esp_ws_handshake_status_code) {
+        case 401: fail("API anahtari reddedildi (401)"); return;
+        case 403: fail("Erisim yok (403)"); return;
+        case 404: fail("Model bulunamadi (404)"); return;
+        case 429: fail("Kota veya hiz siniri (429)"); return;
+        default: break;
+    }
+    if (e->esp_tls_stack_err || e->esp_tls_cert_verify_flags) {
+        // Either the root is absent from the certificate bundle or something on
+        // the network is terminating TLS with a certificate of its own.
+        fail("TLS: sertifika dogrulanamadi");
+        return;
+    }
+    fail("Baglanti hatasi");
+}
 static void websocket_event(void *arg,esp_event_base_t base,int32_t id,void *event_data) {
     esp_websocket_event_data_t *e=event_data;
     if (id==WEBSOCKET_EVENT_CONNECTED) xEventGroupSetBits(events,EV_CONNECTED);
-    else if (id==WEBSOCKET_EVENT_ERROR) fail("Baglanti hatasi");
+    else if (id==WEBSOCKET_EVENT_ERROR) report_connection_error(&e->error_handle);
     else if (id==WEBSOCKET_EVENT_DISCONNECTED) {
         if (!(xEventGroupGetBits(events)&EV_DONE)) fail("Baglanti kesildi");
     } else if (id==WEBSOCKET_EVENT_DATA && !atomic_load(&abort_audio)) {

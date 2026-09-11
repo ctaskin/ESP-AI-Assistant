@@ -174,14 +174,62 @@ I (…) speech: MultiNet candidate id=1 prob=0.71 threshold=0.85 -> rejected
    önce codec, I2S slot ve kazancı doğrula: `menuconfig > Ceko > Use right I2S microphone
    slot` ile slotu değiştirmeyi ve `Microphone gain dB` değerini artırmayı dene.
 2. **Tepe seviye konuşurken yükseliyor ama hiç `MultiNet candidate` satırı yok** → ses
-   geliyor, MultiNet hiçbir adayı yakalamıyor. Yazım sorunu: `Experimental MultiNet spelling
-   for hey ceko` değerini değiştirip dene (model İngilizce MultiNet7'dir, Türkçe telaffuz
-   için yazım deneme gerektirir).
+   geliyor, MultiNet hiçbir adayı yakalamıyor. Yazım sorunu. Model İngilizce MultiNet7'dir;
+   Türkçe "ceko"nun hangi İngilizce yazımla yakalanacağı kağıt üstünde çıkarılamaz, denemek
+   gerekir. Bu yüzden ayar **noktalı virgülle ayrılmış bir liste** kabul ediyor ve her biri
+   ayrı komut olarak kaydediliyor; hangisi tutarsa uyandırıyor. Varsayılan:
+   `hey jeko;hey jekko;hey jecko;hay jeko`. Açılışta hepsi loglanır:
+
+   ```
+   I (…) speech: Wake spelling 1: "hey jeko"
+   I (…) speech: Wake spelling 2: "hey jekko"
+   ```
+
+   Tuttuğunda `MultiNet candidate id=2 … -> wake` satırındaki numara hangi yazımın
+   çalıştığını söyler. Listeye kendi denemelerini ekle; çalışan bulununca yalnızca onu bırak.
 3. **`rejected` satırları görünüyor** → doğru duyuluyor ama eşiğin altında. `Wake confidence
    percent` değerini kademeli düşür; yanlış uyanmaları da kaydet.
 
-Dokunmatik uyandırma çalışıyor ama sözcük çalışmıyorsa, mikrofon–API–hoparlör zincirinin
-tamamı sağlam demektir ve sorun yalnızca uyandırma tanımadadır.
+Hiçbir yazım tutmazsa cihaz durmaz, hata basıp devam eder: dokunmatik uyandırma ve kayıt
+görevleri çalışmaya devam etmeli.
+
+### Bağlantı hataları
+
+Bağlantı hatası artık sınıflandırılıyor; seri logda tek bir ayrıntı satırı var:
+
+```
+E (…) realtime: WebSocket error: type=1 http_status=0 tls_esp_err=ESP_ERR_MBEDTLS_SSL_HANDSHAKE_FAILED
+      tls_stack_err=12288 tls_cert_flags=0x00000000 sock_errno=119
+```
+
+| Ekranda | Anlamı |
+|---|---|
+| `API anahtari reddedildi (401)` | Anahtar yanlış veya iptal edilmiş |
+| `Erisim yok (403)` | Hesapta bu kaynağa yetki yok |
+| `Model bulunamadi (404)` | `OpenAI Realtime model ID` bu hesapta yok |
+| `Kota veya hiz siniri (429)` | Bakiye veya hız sınırı |
+| `TLS: sertifika dogrulanamadi` | El sıkışma kök sertifikada düştü |
+
+**`TLS: sertifika dogrulanamadi` / `No matching trusted root certificate found`:** sunucunun
+gönderdiği zincirin en üstündeki sertifikanın vereni, ESP-IDF sertifika paketindeki 145 kök
+arasında yok. İki olasılık var ve hangisi olduğunu cihaz söyleyemez — **aynı ağdaki Mac'ten**
+bak:
+
+```sh
+openssl s_client -showcerts -servername api.openai.com \
+  -connect api.openai.com:443 </dev/null 2>/dev/null | grep -E "^(depth|verify|subject|issuer)"
+```
+
+- Zincir tanıdık bir genel kökle bitiyorsa (DigiCert, ISRG, GlobalSign gibi) paket eksik
+  demektir. O kökü PEM olarak `certs/` altına koy ve
+  `menuconfig > Component config > mbedTLS > Certificate Bundle > Add custom certificates to
+  the default bundle` seçeneğini açıp yolu `certs` yap.
+- Zincirin tepesinde kurum/router adı taşıyan bir kök görüyorsan ağ TLS'i araya giriyor
+  demektir. O ağda bu cihaz OpenAI'a bağlanamaz; başka bir ağ (örneğin telefon hotspot'u)
+  ile dene.
+
+Dokunmatik uyandırma çalışıyor ama sözcük çalışmıyorsa, mikrofon ve kayıt zinciri sağlam
+demektir; bağlantı hatası alıyorsan sorun uyandırmada değil ağ/TLS tarafındadır.
 
 ## Ayarlar
 
