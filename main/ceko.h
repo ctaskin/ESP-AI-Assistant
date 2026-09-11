@@ -5,6 +5,10 @@
 #include "esp_err.h"
 #include "driver/i2c_master.h"
 
+// Shown on the idle face. Must match the WakeNet model selected under
+// menuconfig > ESP Speech Recognition > Load Multiple Wake Words.
+#define CEKO_WAKE_HINT "hi esp"
+
 typedef enum { CEKO_BOOT, CEKO_IDLE, CEKO_LISTEN, CEKO_THINK, CEKO_SPEAK, CEKO_ERROR } ceko_state_t;
 void ceko_state_set(ceko_state_t state);
 ceko_state_t ceko_state_get(void);

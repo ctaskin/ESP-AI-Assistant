@@ -33,7 +33,7 @@ Başka bilgisayara/oturuma geçerken ZIP ve bu belge birlikte aktarılmalı. Yuk
 | `main/board.c` | Güç, ES8311, I2C/I2S mikrofon ve hoparlör |
 | `main/face.c` | SH8601 AMOLED, LVGL 9, göz/ağız animasyonu |
 | `main/touch.c` | Dokunmatik panel, dokununca dinlemeye geçiş |
-| `main/speech.c` | AFE/VAD, MultiNet, uyandırma ve kayıt |
+| `main/speech.c` | AFE/VAD, WakeNet uyandırma ve kayıt |
 | `main/capture_gate.c` | Konuşma bitişi, boş/uzun kayıt sınırları |
 | `main/realtime.c` | TLS WebSocket oturumu, ses gönderme/çalma, hata yönetimi |
 | `main/audio_math.c` | 16↔24 kHz FIR örnekleme dönüşümü ve RMS |
@@ -46,7 +46,7 @@ Başka bilgisayara/oturuma geçerken ZIP ve bu belge birlikte aktarılmalı. Yuk
 ## 3. Mevcut davranış ve mimari
 
 1. Açılışta güç ve yüz başlatılır. Normal modda ayarlar kontrol edilip ses, Wi-Fi, NTP ve görevler başlatılır.
-2. `IDLE`: Turkuaz gözler kırpılır. Mikrofon yerel AFE ve MultiNet tarafından işlenir; bekleme sesi API'ye gönderilmez.
+2. `IDLE`: Turkuaz gözler kırpılır. Mikrofon yerel AFE ve WakeNet tarafından işlenir; bekleme sesi API'ye gönderilmez.
 3. Uyandırma algılanınca `LISTEN`: Gözler yeşile döner, sonraki ses PSRAM'de tutulur. Uyandırmayı tetikleyen çerçeve gönderilmez.
 4. Konuşma sonrası 1 saniye sessizlik kaydı bitirir. `THINK` durumuna geçilir.
 5. Bu noktada yeni WebSocket oturumu açılır; kayıt 16 kHz'den 24 kHz'e çevrilerek gönderilir. Yerel bitiş kararı `input_audio_buffer.commit` ve `response.create` akışını tetikler.
@@ -59,15 +59,19 @@ Her uyandırma **tek soru–tek cevap** içindir. Sohbet geçmişi tutulmaz. Yan
 
 Tek kayıt tamponu ağ görevine ödünç verilir; `IDLE` durumuna dönene kadar üzerine yazılmaması gerekir. Bu sahiplik kuralı, yeni sohbet veya söz kesme özellikleri eklenirken korunmalı.
 
-## 4. En önemli teknik belirsizlik: “hey ceko”
+## 4. Uyandırma: MultiNet hack'i bırakıldı, WakeNet'e geçildi
 
-Bu uygulamada özel eğitilmiş Türkçe wake-word modeli bulunmuyor. ESP-SR **MultiNet7 İngilizce komut tanıyıcısı**, `hey jeko` yazımı ve %85 güven eşiğiyle sürekli çalıştırılıyor; zaman aşımında sıfırlanıyor. WakeNet devre dışı.
+> **11 Eylül 2026 düzeltmesi.** v0.1'in tasarımı hatalıydı: İngilizce **MultiNet7 komut tanıyıcısı** sürekli dinletilerek uyandırma sözcüğü yerine kullanılıyordu. Espressif'in dokümanı MultiNet'in WakeNet cihazı uyandırdıktan **sonra** çalıştırılmasını söylüyor; sürekli dinletmek desteklenen bir kullanım değil. Fiziksel kartta hiç tetiklenmedi — mikrofon sağlamken (tepe seviye 46-65/100) seri logda tek bir MultiNet adayı bile çıkmadı. MultiNet tümüyle kaldırıldı.
 
-Bu, prototip için deneysel komut yakalama yöntemidir. Türkçe “ceko” telaffuzunun başarı oranı, ortam gürültüsü etkisi ve yanlış uyanmalar **ölçülmedi**. Derlemenin geçmesi bu özelliğin çalıştığını kanıtlamaz.
+Sesli aktivasyon artık ESP-SR'ın hazır **WakeNet9 `wn9_hiesp`** modeliyle yapılıyor: İngilizce "Hi, ESP" (*hay es pi*). Model `menuconfig > ESP Speech Recognition > Load Multiple Wake Words (WakeNet9)` altından seçiliyor, `sdkconfig.defaults` içinde `CONFIG_SR_WN_WN9_HIESP=y`. MultiNet kapatıldı (`CONFIG_SR_MN_EN_NONE=y`), bu da model bölümünü belirgin şekilde küçültüyor.
 
-İlk kullanımda “hey ceko” denildikten sonra gözler yeşile dönünce soru sorulmalı. Uyandırmayla aynı nefeste söylenen sorunun ilk hecesi kaybolabilir. Kullanıcının istediği kesintisiz akış henüz bu açıdan doğrulanmış değildir.
+Kod tarafı: `cfg->wakenet_init = true` ve model adı `esp_srmodel_filter(models, ESP_WN_PREFIX, NULL)` ile veriliyor; algılama `afe_fetch_result_t.wakeup_state == WAKENET_DETECTED` üzerinden okunuyor. WakeNet yalnızca `IDLE` durumunda etkin, diğer durumlarda `disable_wakenet` ile kapatılıyor; Ceko kendi sesiyle uyanmıyor. Eşik `menuconfig > Ceko > WakeNet detection threshold percent` ile override edilebilir; `0` modelin kendi eşiğini korur ve varsayılandır.
 
-Algılama başarısızsa önce mikrofon örnekleri/slot/kazanç doğrulanmalı, ardından yazım ve eşik denenmeli. Kullanıcı talebi olmadan bas-konuşa veya farklı uyandırma sözcüğüne geçilmemeli. Uzun vadede özel wake-word modeli ve gerekirse ön ses tamponu değerlendirilmeli.
+Ekranda görünen ipucu metni `main/ceko.h` içindeki `CEKO_WAKE_HINT`. Başka bir hazır sözcüğe geçilirse birlikte güncellenmeli.
+
+**Türkçe "Hey Ceko" hâlâ yok.** Gerçek bir Türkçe WakeNet modeli Espressif'in ayrı model özelleştirme süreciyle üretiliyor; metin yazmakla olmuyor. Bu, tanımlı ve açık bir sonraki iş kalemidir. O gelene kadar sesli yol "Hi, ESP", ikinci yol ise ekrana dokunmaktır.
+
+Uyandırmadan sonra gözler yeşile dönünce konuşulmalı; aynı nefeste söylenen sorunun ilk hecesi kaybolabilir (ön ses tamponu yok). Algılama başarısızsa önce mikrofon tepe seviyesi loguna bakılmalı, sonra eşik denenmeli.
 
 ## 5. Donanım ve bağımlılıklar
 
@@ -117,7 +121,7 @@ Derleme hedefi ESP-IDF **6.1**, ESP32-S3. Manifest aralığı `>=6.0.0,<7.0.0`.
 |---|---|
 | Model kimliği | `gpt-realtime-2.1-mini` |
 | Ses | `marin` |
-| Uyandırma yazımı / eşik | `hey jeko` / %85 |
+| Uyandırma sözcüğü / eşik | WakeNet9 `wn9_hiesp` ("Hi, ESP") / model varsayılanı |
 | Mikrofon | 16 kHz PCM16, varsayılan sol I2S slot, 24 dB kazanç |
 | Hoparlör seviyesi | %65 |
 | Ekran yönü | 180° |
@@ -193,7 +197,7 @@ Sonraki sürüm adayları: güvenilir özel uyandırma modeli; ilk hece kaybın�
 
 ## 10. Yeni oturuma verilecek başlangıç talimatı
 
-> Ekli Ceko v0.1 ZIP'ini ve CEKO_HANDOFF.md dosyasını devral. ESP-IDF 6.1, Waveshare ESP32-S3-Touch-AMOLED-1.32 ve OpenAI Realtime mini ile devam et. Bas-konuş istemiyorum; “hey ceko” ile uyanmalı, göz kırpan iki göz ve sesle hareket eden ağız olmalı. Repo şimdilik açma. Kaynak ve doğrulama belgesini incele; ilk öncelik fiziksel ekran/ses, deneysel MultiNet uyandırması ve gerçek API bağlantısını doğrulamak. Derleme başarısını donanım başarısı olarak sunma. Model adını, pinleri veya çalışmayan bir özelliği tahmin ederek değiştirme; bulguyu kaydet ve gerekli değişikliği uygula.
+> Ekli Ceko v0.1 ZIP'ini ve CEKO_HANDOFF.md dosyasını devral. ESP-IDF 6.1, Waveshare ESP32-S3-Touch-AMOLED-1.32 ve OpenAI Realtime mini ile devam et. Bas-konuş istemiyorum; sesle uyanmalı (şimdilik hazır WakeNet sözcüğü, hedef Türkçe “hey ceko”), göz kırpan iki göz ve sesle hareket eden ağız olmalı. Repo şimdilik açma. Kaynak ve doğrulama belgesini incele; ilk öncelik WakeNet sesli uyandırmayı, dokunmatik uyandırmayı ve gerçek API bağlantısını doğrulamak. Derleme başarısını donanım başarısı olarak sunma. Model adını, pinleri veya çalışmayan bir özelliği tahmin ederek değiştirme; bulguyu kaydet ve gerekli değişikliği uygula.
 
 ## Referans izi
 

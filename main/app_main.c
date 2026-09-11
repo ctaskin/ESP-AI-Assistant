@@ -73,7 +73,7 @@ void app_main(void) {
     face_start();
 #ifdef CONFIG_CEKO_FACE_DEMO
     for (;;) {
-        ceko_state_set(CEKO_IDLE); ceko_status_set("hey ceko"); vTaskDelay(pdMS_TO_TICKS(6000));
+        ceko_state_set(CEKO_IDLE); ceko_status_set(CEKO_WAKE_HINT); vTaskDelay(pdMS_TO_TICKS(6000));
         ceko_state_set(CEKO_LISTEN); ceko_status_set("Dinliyorum"); vTaskDelay(pdMS_TO_TICKS(3000));
         ceko_state_set(CEKO_THINK); ceko_status_set("Dusunuyorum"); vTaskDelay(pdMS_TO_TICKS(2000));
         ceko_state_set(CEKO_SPEAK); ceko_status_set("Ceko");
@@ -100,6 +100,6 @@ void app_main(void) {
     wifi_init();
     realtime_start();
     speech_start();
-    ceko_status_set("hey ceko");
+    ceko_status_set(CEKO_WAKE_HINT);
     ceko_state_set(CEKO_IDLE);
 }

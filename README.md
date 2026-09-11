@@ -29,21 +29,21 @@ Dokunmatik panel üretici referansındaki değerlerle sürülüyor: codec ile ay
 görüyorsan dokunmatik uyandırma çalışmaz. `menuconfig > Ceko > Start listening when the
 screen is touched` ile kapatılabilir.
 
-**"hey ceko" de.** Deneysel yol; aşağıdaki sınırlara bak.
+**"Hi ESP" de.** Uyandırma sözcüğü WakeNet9 `wn9_hiesp` modelidir; İngilizce "Hi, ESP",
+yani *hay es pi*. Espressif'in hazır modeli, ayrı eğitim gerektirmez. Gözler yeşile dönünce
+sorunu sor. Ayrıntı: "Uyandırma sözcüğü".
 
 ## Önce bilmen gereken iki sınır
 
-- **“Hey ceko” deneysel:** Hazır/eğitilmiş Türkçe WakeNet modeli yok. MultiNet7 İngilizce
-  komut tanıyıcısı, `hey jeko` yazımıyla sürekli çalıştırılıyor ve zaman aşımlarında sıfırlanıyor.
-  Bu, Espressif'in önerdiği WakeNet → MultiNet zincirinin yerine kullanılan prototip yaklaşımıdır.
-  Türkçe /ceko/ telaffuzunun tanınması ve yanlış uyanma oranı fiziksel kartta doğrulanmadı.
-  `menuconfig > Ceko` altında yazım ve güven eşiği değiştirilebilir. Güvenilir ürün için özel
-  wake-word modeli eğitimi/entegrasyonu gerekir. Alternatif ifade sessizce devreye sokulmaz.
+- **Uyandırma sözcüğü Türkçe değil:** Sesli aktivasyon hazır WakeNet9 `wn9_hiesp` modeliyle,
+  yani "Hi, ESP" ile yapılır. Türkçe "Hey Ceko" için gerçek bir WakeNet modeli gerekiyor ve o
+  Espressif'in ayrı model özelleştirme süreciyle üretiliyor; yalnızca metin yazmak yetmiyor.
+  Bu, açık bir sonraki iş kalemidir.
 - **Yarı çift yönlü:** Ceko cevap verirken mikrofon işlenip atılır. Kendi sesine uyanmaz;
   fakat konuşurken sözünü kesme yoktur. Bu sürümde akustik yankı giderme kapalıdır.
 
-Uyandırma tanıyıcısı gecikmeli karar verebildiği için başlangıçta “hey ceko” dedikten sonra
-**gözler yeşile dönünce konuş**. Aynı nefeste devam edilen komutun ilk hecesi kaçabilir.
+Uyandırma sözcüğünü söyledikten sonra **gözler yeşile dönünce konuş**. Aynı nefeste devam
+edilen sorunun ilk hecesi kaçabilir; ön ses tamponlaması bu sürümde yok.
 
 ## Kurulum — Mac / VS Code
 
@@ -70,7 +70,7 @@ idf.py -p /dev/cu.usbmodemXXXX flash monitor
 ```
 
 `XXXX` yerine eklentinin bulduğu gerçek portu yaz. İlk yüklemede **tam `flash`** yap:
-MultiNet model bölümü de yüklenir. Yalnızca `app-flash` kullanma. Seri monitörden çıkış: `Ctrl+]`.
+WakeNet model bölümü de yüklenir. Yalnızca `app-flash` kullanma. Seri monitörden çıkış: `Ctrl+]`.
 Kart görünmüyorsa BOOT'a basılı tutarak USB'ye bağla, ardından bırak.
 
 Kullanılabilir OpenAI model adları hesap bazında değişebilir. `model_not_found`, `invalid_api_key`
@@ -111,7 +111,7 @@ varsa `sdkconfig.defaults` **uygulanmaz**, dolayısıyla oradaki `CONFIG_IDF_TAR
 satırı da devreye girmez. Belirtileri: derleme çıktısında `xtensa-esp32-elf-gcc` ve
 `Building ESP-IDF components for target esp32`, ayrıca
 `unknown kconfig symbol 'SPIRAM_MODE_OCT'` uyarısı (ESP32 klasikte oktal PSRAM yoktur).
-ESP32 hedefinde SH8601 QSPI ekran ve MultiNet7 zaten çalışmaz.
+ESP32 hedefinde SH8601 QSPI ekran ve ESP-SR modelleri zaten çalışmaz.
 
 Her iki durumda da temiz başlangıç:
 
@@ -159,39 +159,51 @@ Desteklenmiyor. cJSON, IDF 6'da çekirdekten çıkarıldı ve `espressif/cjson` 
 bağımlılık; IDF 5.x'te aynı başlığı çekirdekteki `json` bileşeni de verdiği için çakışır.
 Kök `CMakeLists.txt` bu yüzden IDF 6'dan küçük sürümlerde derlemeyi durdurur.
 
-### Uyandırma çalışmıyorsa
+### Uyandırma sözcüğü
 
-Seri monitör iki tanı satırı basar:
+Sesli aktivasyon **WakeNet9 `wn9_hiesp`** ile yapılır: İngilizce "Hi, ESP", yani *hay es pi*.
+Model ESP-SR paketinde hazır gelir, ayrı eğitim gerektirmez.
+
+Sözcük `menuconfig > ESP Speech Recognition > Load Multiple Wake Words (WakeNet9)` altından
+seçilir. `sdkconfig.defaults` bunu `CONFIG_SR_WN_WN9_HIESP=y` ile ayarlar. Başka bir hazır
+sözcüğe geçersen `main/ceko.h` içindeki `CEKO_WAKE_HINT` metnini de güncelle — ekranda o yazar.
+
+> **Neden "hey ceko" değil.** Önceki sürüm İngilizce komut tanıyıcısı MultiNet'i sürekli
+> dinleterek uyandırma sözcüğü gibi kullanıyordu. Espressif'in dokümanı MultiNet'in WakeNet
+> cihazı uyandırdıktan **sonra** çalıştırılmasını söylüyor; sürekli dinletmek desteklenen bir
+> kullanım değil ve pratikte hiç tetiklenmedi (logda tek bir aday bile çıkmadı). Türkçe
+> "Hey Ceko" için gerçek bir WakeNet modeli gerekiyor; bu Espressif'in ayrı model özelleştirme
+> süreciyle üretilir, metin yazmakla olmaz. Sonraki iş kalemi.
+
+Açılışta model adı loglanır, tetiklendiğinde de:
 
 ```
-I (…) speech: Microphone peak level over 5 s: 42/100
-I (…) speech: MultiNet candidate id=1 prob=0.71 threshold=0.85 -> rejected
+I (…) speech: Ready: wake=wn9_hiesp, free internal=… PSRAM=… bytes
+I (…) speech: Wake word detected (word index 1)
 ```
 
-İlkini sırayla oku:
+`W AFE_CONFIG: wakenet model not found` görüyorsan model seçili değil demektir; o durumda
+yalnızca dokunmatik çalışır ve kod bunu açıkça loglar.
 
-1. **Tepe seviye sürekli 0** → mikrofon yolu ölü. Uyandırma yazımını veya eşiği değiştirme;
-   önce codec, I2S slot ve kazancı doğrula: `menuconfig > Ceko > Use right I2S microphone
-   slot` ile slotu değiştirmeyi ve `Microphone gain dB` değerini artırmayı dene.
-2. **Tepe seviye konuşurken yükseliyor ama hiç `MultiNet candidate` satırı yok** → ses
-   geliyor, MultiNet hiçbir adayı yakalamıyor. Yazım sorunu. Model İngilizce MultiNet7'dir;
-   Türkçe "ceko"nun hangi İngilizce yazımla yakalanacağı kağıt üstünde çıkarılamaz, denemek
-   gerekir. Bu yüzden ayar **noktalı virgülle ayrılmış bir liste** kabul ediyor ve her biri
-   ayrı komut olarak kaydediliyor; hangisi tutarsa uyandırıyor. Varsayılan:
-   `hey jeko;hey jekko;hey jecko;hay jeko`. Açılışta hepsi loglanır:
+WakeNet yalnızca boştayken dinlenir; Ceko konuşurken kapatılır, böylece kendi sesiyle
+uyanmaz.
 
-   ```
-   I (…) speech: Wake spelling 1: "hey jeko"
-   I (…) speech: Wake spelling 2: "hey jekko"
-   ```
+Duyarlılık gerekirse `menuconfig > Ceko > WakeNet detection threshold percent` ile
+değiştirilir. `0` modelin kendi eşiğini korur — varsayılan budur ve Espressif'in ayarladığı
+değerdir. 40-99 arası bir değer yalnızca override etmek için verilir; düşürmek daha kolay
+tetikler ama yanlış uyanmaları artırır.
 
-   Tuttuğunda `MultiNet candidate id=2 … -> wake` satırındaki numara hangi yazımın
-   çalıştığını söyler. Listeye kendi denemelerini ekle; çalışan bulununca yalnızca onu bırak.
-3. **`rejected` satırları görünüyor** → doğru duyuluyor ama eşiğin altında. `Wake confidence
-   percent` değerini kademeli düşür; yanlış uyanmaları da kaydet.
+### Mikrofon çalışmıyorsa
 
-Hiçbir yazım tutmazsa cihaz durmaz, hata basıp devam eder: dokunmatik uyandırma ve kayıt
-görevleri çalışmaya devam etmeli.
+Seri monitör beş saniyede bir tepe seviye basar:
+
+```
+I (…) speech: Microphone peak level over 5 s: 46/100
+```
+
+Sürekli 0 ise mikrofon yolu ölü demektir. Uyandırma ayarlarına dokunma; önce codec, I2S slot
+ve kazancı doğrula: `menuconfig > Ceko > Use right I2S microphone slot` ile slotu değiştir,
+`Microphone gain dB` değerini artır.
 
 ### Bağlantı hataları
 
@@ -246,8 +258,9 @@ demektir; bağlantı hatası alıyorsan sorun uyandırmada değil ağ/TLS taraf�
 
 | Ayar | Varsayılan | Amaç |
 |---|---|---|
-| Uyandırma yazımı | `hey jeko` | Türkçe ceko için deneysel İngilizce yazım |
-| Güven eşiği | %85 | Yanlış uyanma/kaçırma dengesi |
+| Uyandırma sözcüğü | `wn9_hiesp` ("Hi, ESP") | ESP-SR menüsünden seçilir, Ceko menüsünden değil |
+| Uyandırma eşiği | Model varsayılanı (`0`) | 40-99 yalnızca override içindir |
+| Dokunmatik uyandırma | Açık | Ekrana dokununca dinlemeye geçer |
 | Sessizlik | 1000 ms | Sorunun bittiğine karar verme |
 | Maksimum kayıt | 20 saniye | RAM ve kullanım sınırı; aşılırsa kayıt gönderilmez |
 | Konuşma bekleme | 5 saniye | Uyandırmadan sonra ses yoksa ücretsiz beklemeye döner |
@@ -274,7 +287,7 @@ Yanlış uyandırma sonrası gerçek konuşma algılanırsa o kayıt API'ye gön
 | `main/board.c` | Güç, ES8311 ve I2S ses sürücüsü |
 | `main/face.c` | AMOLED, LVGL 9, göz ve ağız animasyonu |
 | `main/touch.c` | Dokunmatik panel, dokununca dinlemeye geçiş |
-| `main/speech.c` | Yerel AFE, MultiNet, uyandırma ve kayıt |
+| `main/speech.c` | Yerel AFE/VAD, WakeNet uyandırma ve kayıt |
 | `main/realtime.c` | OpenAI WebSocket, ses kuyruğu, hata ve zaman aşımı |
 | `main/capture_gate.c` | Konuşma/sessizlik ve kayıt süresi sınırları |
 | `main/audio_math.c` | 16↔24 kHz FIR dönüşümü ve RMS |

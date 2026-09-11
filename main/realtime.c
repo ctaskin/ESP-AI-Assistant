@@ -276,7 +276,7 @@ cleanup:
         if (!ok) { ceko_state_set(CEKO_ERROR); vTaskDelay(pdMS_TO_TICKS(2500)); }
         // Acoustic tail cooldown; capture task continues draining microphone locally.
         ceko_state_set(CEKO_THINK); ceko_level_set(0); vTaskDelay(pdMS_TO_TICKS(600));
-        ceko_status_set("hey ceko"); ceko_state_set(CEKO_IDLE);
+        ceko_status_set(CEKO_WAKE_HINT); ceko_state_set(CEKO_IDLE);
     }
 }
 void realtime_start(void) {
