@@ -37,6 +37,12 @@ Aramayı her iki durumda da **servis yapar**; kart ikinci bir bağlantı açmaz.
   Kendi MCP sunucunu (Tavily, Brave, kendi kurduğun) adres ve gerekiyorsa bearer token
   girerek kullanabilirsin.
 
+Arama yapılan turlar **belirgin biçimde yavaştır**: servis, uzak sunucuyu çağırırken
+saniyelerce hiçbir şey göndermez. Bu yüzden bir araç çalıştığında yanıt bekleme sınırı
+45 saniyeye, araç etkinken 60 saniye sessizliğe / toplam 3 dakikaya çıkar; ekranda
+`Ariyorum` görünür. Vazgeçildiğinde servise `response.cancel` gönderilir, böylece
+kimsenin duymayacağı bir cevap üretilip faturalanmaz.
+
 Çalıştığını seri logdan görürsün:
 
 ```

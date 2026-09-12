@@ -68,8 +68,15 @@ Arama ise hiç çalışmıyordu, çünkü OpenAI tarafında hiçbir araç gönde
 Artık `CEKO_OPENAI_MCP_URL` varsayılan olarak Exa'nın barındırdığı anahtarsız uç noktaya
 işaret ediyor ve araç bağlıyken model talimatına aramayı kullanmasını söyleyen bir cümle
 ekleniyor. MCP çağrı olayları (`mcp_list_tools`, `response.mcp_call.*`) loglanıyor.
-**Kartta henüz denenmedi**; Exa uç noktasının OpenAI tarafından kabul edildiği ve gerçek
-bir aramanın döndüğü doğrulanmalı.
+**Kartta doğrulandı:** `rt_openai: tool: response.mcp_call_arguments.delta` satırları
+geldi, yani Exa uç noktası kabul edildi ve model aramayı çağırıyor.
+
+Aynı logda ortaya çıkan kusur: arama yapılan turlarda servis 20 saniyeden uzun süre hiç
+mesaj göndermiyor ve tur "Yanit zaman asimi" ile düşüyordu — oysa cevap birkaç saniye
+sonra tamamlanıyordu (`usage total_tokens` satırı zaman aşımından sonra geliyor). Yani
+üretilen ve faturalanan cevap çöpe gidiyordu. Sessizlik sınırı arama açıkken 45 saniyeye,
+bir araç çalışırken 60 saniyeye (toplam 3 dakika) çıkarıldı; vazgeçilirse `response.cancel`
+gönderiliyor ve ekranda `Ariyorum` yazıyor.
 
 ## claude/wizardly-albattani-0tc3dm dalının birleştirilmesi
 

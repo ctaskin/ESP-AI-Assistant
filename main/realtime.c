@@ -37,6 +37,16 @@
 #define SETUP_TIMEOUT_MS 10000
 #define RESPONSE_TIMEOUT_MS 90000
 #define STALL_TIMEOUT_MS 20000
+// A server side search holds the turn silent while it runs, and the service
+// sends nothing at all in the meantime. Giving up at 20 s threw away answers
+// that arrived seconds later, already paid for.
+#define TOOL_RESPONSE_TIMEOUT_MS 180000
+#define TOOL_STALL_TIMEOUT_MS 60000
+#if CONFIG_CEKO_WEB_SEARCH
+#define QUIET_TIMEOUT_MS 45000
+#else
+#define QUIET_TIMEOUT_MS STALL_TIMEOUT_MS
+#endif
 
 typedef struct { const int16_t *pcm; size_t n; } utterance_t;
 typedef struct { int16_t *pcm; size_t n; } playback_t;
@@ -45,7 +55,7 @@ static const rt_provider_t *prov;
 static QueueHandle_t requests, audio_queue;
 static SemaphoreHandle_t played;
 static EventGroupHandle_t events;
-static atomic_bool abort_audio, turn_active, closing;
+static atomic_bool abort_audio, turn_active, closing, tool_active;
 static atomic_uint_fast32_t last_activity_ms;
 static ws_message_t message;
 static audio_resampler_t downsampler;
@@ -128,6 +138,13 @@ static void on_turn_done(void) { xEventGroupSetBits(events,EV_TURN_DONE); }
 static void on_user_text(const char *text) { history_add_user(&history,text); }
 static void on_reply_text(const char *text) { history_add_reply(&history,text); }
 static void on_usage(int total_tokens) { ESP_LOGI(TAG,"usage total_tokens=%d",total_tokens); }
+static void on_tool_activity(void) {
+    if (atomic_exchange(&tool_active,true)) return;
+    ESP_LOGI(TAG,"tool running; waiting longer for this answer");
+    // A search can hold the answer for half a minute; say so on the face
+    // instead of leaving a silent "Dusunuyorum".
+    ceko_status_set("Ariyorum");
+}
 static void on_resume_handle(const char *handle) {
     size_t n = strlen(handle);
     if (n >= sizeof resume_handle) { resume_handle[0]=0; ESP_LOGW(TAG,"resume handle too long"); return; }
@@ -159,6 +176,7 @@ static void on_audio(const char *b64) {
 static const rt_sink_t sink = {
     .ready=on_ready, .audio=on_audio, .turn_done=on_turn_done, .failure=fail_turn,
     .user_text=on_user_text, .reply_text=on_reply_text, .resume_handle=on_resume_handle, .usage=on_usage,
+    .tool_activity=on_tool_activity,
 };
 static void on_json(const char *json) {
     cJSON *root=cJSON_Parse(json);
@@ -288,7 +306,7 @@ static bool send_utterance(utterance_t u) {
     return ok && prov->turn_end(ws);
 }
 static bool run_turn(utterance_t u) {
-    atomic_store(&abort_audio,false); received_samples=0;
+    atomic_store(&abort_audio,false); atomic_store(&tool_active,false); received_samples=0;
     xEventGroupClearBits(events,EV_TURN_DONE|EV_TURN_FAIL);
     audio_resampler_init(&downsampler,prov->recv_rate,16000);
     history_begin_turn(&history);
@@ -296,11 +314,16 @@ static bool run_turn(utterance_t u) {
     bool ok=send_utterance(u);
     if (ok) {
         atomic_store(&last_activity_ms,(uint32_t)(esp_timer_get_time()/1000));
-        int64_t deadline=esp_timer_get_time()+(int64_t)RESPONSE_TIMEOUT_MS*1000;
+        int64_t started=esp_timer_get_time();
         while (!(xEventGroupGetBits(events)&(EV_TURN_DONE|EV_TURN_FAIL))) {
             int64_t now=esp_timer_get_time();
-            if (now>deadline || (uint32_t)((uint32_t)(now/1000)-atomic_load(&last_activity_ms))>STALL_TIMEOUT_MS) {
-                fail_turn("Yanit zaman asimi",NULL); break;
+            bool tool=atomic_load(&tool_active);
+            int64_t total=tool ? TOOL_RESPONSE_TIMEOUT_MS : RESPONSE_TIMEOUT_MS;
+            uint32_t quiet=tool ? TOOL_STALL_TIMEOUT_MS : QUIET_TIMEOUT_MS;
+            if (now-started>total*1000 || (uint32_t)((uint32_t)(now/1000)-atomic_load(&last_activity_ms))>quiet) {
+                // Stop the service from finishing an answer nobody will hear.
+                if (prov->turn_cancel) prov->turn_cancel(ws);
+                fail_turn("Yanit zaman asimi", tool ? "tool" : "quiet"); break;
             }
             vTaskDelay(pdMS_TO_TICKS(50));
         }

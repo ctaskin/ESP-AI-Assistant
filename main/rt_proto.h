@@ -30,6 +30,7 @@ typedef struct {
     void (*reply_text)(const char *text);  // transcript of the answer
     void (*resume_handle)(const char *handle);  // server side context handle, if any
     void (*usage)(int total_tokens);
+    void (*tool_activity)(void);           // a server side tool is working on this turn
 } rt_sink_t;
 
 // Setup levels: 0 asks for everything, each further level drops the optional
@@ -48,6 +49,7 @@ typedef struct {
     bool (*turn_begin)(void *ws);
     bool (*audio_chunk)(void *ws, const char *b64);
     bool (*turn_end)(void *ws);
+    bool (*turn_cancel)(void *ws);         // NULL when the service has no cancel
     void (*handle)(cJSON *root, const rt_sink_t *sink);
 } rt_provider_t;
 

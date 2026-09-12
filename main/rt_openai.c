@@ -139,6 +139,11 @@ static bool audio_chunk(void *ws, const char *b64) {
     cJSON_AddStringToObject(root,"audio",b64);
     return rt_send_json(ws,root);
 }
+// Give up cleanly instead of leaving the service generating an answer nobody
+// will hear and still be billed for.
+static bool turn_cancel(void *ws) {
+    return rt_send_text(ws,"{\"type\":\"response.cancel\"}");
+}
 static bool turn_end(void *ws) {
     return rt_send_text(ws,"{\"type\":\"input_audio_buffer.commit\"}") &&
            rt_send_text(ws,"{\"type\":\"response.create\"}");
@@ -179,9 +184,11 @@ static void handle(cJSON *root, const rt_sink_t *sink) {
         return;
     }
     if (!strncmp(type,"response.mcp_call",17) || !strncmp(type,"mcp_list_tools",14) ||
-        !strcmp(type,"response.web_search_call.in_progress")) {
-        // Visible proof that the search tool is reachable and being used.
+        !strncmp(type,"response.web_search_call",23)) {
+        // Visible proof that the search tool is reachable, and the signal that
+        // this turn is allowed to stay quiet for longer.
         ESP_LOGI(TAG,"tool: %s",type);
+        sink->tool_activity();
         return;
     }
     if (!strcmp(type,"response.done")) {
@@ -200,5 +207,5 @@ const rt_provider_t rt_openai_provider = {
     .max_session_ms = OPENAI_SESSION_MS, .renew_margin_ms = OPENAI_RENEW_MARGIN_MS,
     .config_error = config_error, .uri = uri, .auth_header = auth_header,
     .setup = setup, .turn_begin = turn_begin, .audio_chunk = audio_chunk,
-    .turn_end = turn_end, .handle = handle,
+    .turn_end = turn_end, .turn_cancel = turn_cancel, .handle = handle,
 };

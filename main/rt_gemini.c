@@ -143,6 +143,12 @@ static void handle(cJSON *root, const rt_sink_t *sink) {
         ESP_LOGW(TAG,"server asked to reconnect");
         return;
     }
+    if (cJSON_GetObjectItemCaseSensitive(root,"toolCall")) {
+        // Google search runs on the service side; the turn may stay quiet.
+        ESP_LOGI(TAG,"tool call in progress");
+        sink->tool_activity();
+        return;
+    }
     cJSON *usage = cJSON_GetObjectItemCaseSensitive(root,"usageMetadata");
     if (cJSON_IsObject(usage)) {
         cJSON *total = cJSON_GetObjectItemCaseSensitive(usage,"totalTokenCount");
@@ -150,6 +156,7 @@ static void handle(cJSON *root, const rt_sink_t *sink) {
     }
     cJSON *server_content = cJSON_GetObjectItemCaseSensitive(root,"serverContent");
     if (!cJSON_IsObject(server_content)) return;
+    if (cJSON_GetObjectItemCaseSensitive(server_content,"groundingMetadata")) sink->tool_activity();
     transcript(server_content,"inputTranscription",sink->user_text);
     transcript(server_content,"outputTranscription",sink->reply_text);
     cJSON *model_turn = cJSON_GetObjectItemCaseSensitive(server_content,"modelTurn");
@@ -166,5 +173,5 @@ const rt_provider_t rt_gemini_provider = {
     .max_session_ms = GEMINI_SESSION_MS, .renew_margin_ms = GEMINI_RENEW_MARGIN_MS,
     .config_error = config_error, .uri = uri, .auth_header = NULL,
     .setup = setup, .turn_begin = turn_begin, .audio_chunk = audio_chunk,
-    .turn_end = turn_end, .handle = handle,
+    .turn_end = turn_end, .turn_cancel = NULL, .handle = handle,
 };
