@@ -6,6 +6,7 @@
 #include "esp_codec_dev.h"
 #include "esp_codec_dev_defaults.h"
 #include "esp_check.h"
+#include "esp_log.h"
 #include "es8311_codec.h"
 
 // Waveshare S3_AMOLED_1_32 reference board, not the 1.43-inch board.
@@ -60,6 +61,11 @@ void board_audio_init(void) {
     ESP_ERROR_CHECK(esp_codec_dev_open(codec, &fs));
     ESP_ERROR_CHECK(esp_codec_dev_set_out_vol(codec, CONFIG_CEKO_SPEAKER_VOLUME));
     ESP_ERROR_CHECK(esp_codec_dev_set_in_gain(codec, CONFIG_CEKO_MIC_GAIN));
+    // Ground truth for what was actually built: an out of range value in
+    // sdkconfig is clamped to the Kconfig limit without a word, so reading the
+    // menu is not proof of what the board is running.
+    ESP_LOGI("board", "Speaker volume %d%%, microphone gain %d dB",
+             CONFIG_CEKO_SPEAKER_VOLUME, CONFIG_CEKO_MIC_GAIN);
 }
 
 i2c_master_bus_handle_t board_i2c_bus(void) { return i2c_bus; }
