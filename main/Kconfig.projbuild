@@ -150,8 +150,13 @@ config CEKO_MAX_RECORD_SECONDS
     default 20
 config CEKO_SPEAKER_VOLUME
     int "Speaker volume percent"
-    range 0 90
+    range 0 100
     default 65
+    help
+      Passed straight to esp_codec_dev_set_out_vol, which accepts 0-100. The
+      v0.1 limit of 90 was a margin with no hardware reason behind it. The last
+      few percent are where a small speaker starts to distort, so raise it while
+      listening rather than jumping to 100.
 config CEKO_MIC_GAIN
     int "Microphone gain dB"
     range 0 42
