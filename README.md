@@ -24,7 +24,8 @@ Bilgisayar/bridge açık kalmadan, kart Wi-Fi üzerinden doğrudan servise bağl
 **Servis seçimi:** `menuconfig > Ceko > Realtime voice service` ile OpenAI Realtime
 veya Google Gemini Live seçilir. Güncel bilgi gerektiren sorular için Gemini'de
 Google araması servis tarafında çalışır; OpenAI'de uzak bir MCP arama sunucusu
-adresi girmek gerekir. Karşılaştırma, fiyatlar ve gerekçe: `docs/PROVIDERS.md`.
+adresi girmek gerekir. OpenAI'nin hosted `web_search` aracı Realtime uç noktasında
+belgelenmiş değil; varsayılan olarak istenmiyor (menüden deneysel olarak açılabilir). Karşılaştırma, fiyatlar ve gerekçe: `docs/PROVIDERS.md`.
 
 ## Önce bilmen gereken iki sınır
 
@@ -137,6 +138,13 @@ Komut tanıyıcı çekirdek 1'i dolduruyor. Artık yalnızca konuşma sırasınd
 kapatıldı (Espressif'in konuşma örnekleri de böyle yapıyor). Uyarı konuşma sırasında yine
 görünürse tanıma hâlâ gerçek zamanın gerisindedir; kalıcı çözüm WakeNet aşamasıdır.
 
+**`realtime: API hatasi: seri log (... param=... msg=...)` ve ardından `setup failed`**
+Servis, `session.update` içindeki bir alanı kabul etmiyor. Tek bir alan tüm yapılandırmayı
+reddettirdiği için kurulum artık kademeli deniyor: önce her şey, sonra araçsız, sonra akıl
+yürütme alanı olmadan, en sonda transkripsiyon olmadan. Logdaki `param=` hangi alanın
+reddedildiğini söyler; `session configured without optional fields (level N)` satırı da hangi
+kademede bağlanıldığını gösterir. Kalıcı çözüm için o alanı `menuconfig`'den kapat.
+
 **`Hedef yonga 'esp32'`** Repoya daha önce `CONFIG_IDF_TARGET="esp32"` içeren bir
 `sdkconfig` girmişti ve derlemeyi yanlış yongaya yönlendiriyordu. Dosya artık
 izlenmiyor; yukarıdaki `set-target` komutu doğrusunu üretir.
@@ -177,7 +185,7 @@ TLS sertifika kontrolü açıktır, sistem saati NTP ile ayarlanır. Sertifika k
 | Servis | OpenAI Realtime | Gemini Live ile değiştirilebilir |
 | Model | `gpt-realtime-2.1` | Mini'ye göre daha iyi cevap, ~3 kat ses maliyeti |
 | Akıl yürütme | `low` | Gecikmeyi düşük tutar; boş bırakılırsa alan gönderilmez |
-| Web araması | Açık | Gemini'de Google araması; OpenAI'de MCP sunucusu adresi ister |
+| Web araması | Açık | Gemini'de Google araması hazır; OpenAI'de uzak MCP sunucusu adresi gerekir |
 | Bağlam taşıma | 4 tur | Kopma/yenileme sonrası taşınan tur sayısı; 0 kapatır |
 | Uyandırma yazımı | `hey jeko` | Türkçe ceko için deneysel İngilizce yazım |
 | Güven eşiği | %85 | Yanlış uyanma/kaçırma dengesi |

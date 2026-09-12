@@ -33,7 +33,7 @@ static bool uri(char *out, size_t cap) {
         "google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=%s",
         CONFIG_CEKO_GEMINI_API_KEY) < (int)cap;
 }
-static bool setup(void *ws, const char *recap, const char *resume_handle) {
+static bool setup(void *ws, const char *recap, const char *resume_handle, unsigned level) {
     cJSON *root = cJSON_CreateObject();
     cJSON *s = cJSON_AddObjectToObject(root,"setup");
     char model[96];
@@ -55,27 +55,33 @@ static bool setup(void *ws, const char *recap, const char *resume_handle) {
     cJSON_AddItemToArray(parts,part);
 #if CONFIG_CEKO_WEB_SEARCH
     // Search runs on Google's side; the board needs no second connection or key.
-    cJSON *tools = cJSON_AddArrayToObject(s,"tools");
-    cJSON *search = cJSON_CreateObject();
-    cJSON_AddItemToObject(search,"googleSearch",cJSON_CreateObject());
-    cJSON_AddItemToArray(tools,search);
+    if (level < 1) {
+        cJSON *tools = cJSON_AddArrayToObject(s,"tools");
+        cJSON *search = cJSON_CreateObject();
+        cJSON_AddItemToObject(search,"googleSearch",cJSON_CreateObject());
+        cJSON_AddItemToArray(tools,search);
+    }
 #endif
     // Local wake word and VAD decide when a turn starts and ends.
     cJSON *realtime_cfg = cJSON_AddObjectToObject(s,"realtimeInputConfig");
     cJSON *vad = cJSON_AddObjectToObject(realtime_cfg,"automaticActivityDetection");
     cJSON_AddBoolToObject(vad,"disabled",true);
-    cJSON *resume = cJSON_AddObjectToObject(s,"sessionResumption");
-    if (resume_handle && resume_handle[0]) cJSON_AddStringToObject(resume,"handle",resume_handle);
-    cJSON *compression = cJSON_AddObjectToObject(s,"contextWindowCompression");
-    cJSON_AddItemToObject(compression,"slidingWindow",cJSON_CreateObject());
+    if (level < 3) {
+        cJSON *resume = cJSON_AddObjectToObject(s,"sessionResumption");
+        if (resume_handle && resume_handle[0]) cJSON_AddStringToObject(resume,"handle",resume_handle);
+        cJSON *compression = cJSON_AddObjectToObject(s,"contextWindowCompression");
+        cJSON_AddItemToObject(compression,"slidingWindow",cJSON_CreateObject());
+    }
 #if CONFIG_CEKO_MEMORY_TURNS > 0
-    cJSON_AddItemToObject(s,"inputAudioTranscription",cJSON_CreateObject());
-    cJSON_AddItemToObject(s,"outputAudioTranscription",cJSON_CreateObject());
+    if (level < 2) {
+        cJSON_AddItemToObject(s,"inputAudioTranscription",cJSON_CreateObject());
+        cJSON_AddItemToObject(s,"outputAudioTranscription",cJSON_CreateObject());
+    }
 #endif
     if (!rt_send_json(ws,root)) return false;
     // A valid handle restores context on the server, so only replay the recap
     // when we reconnected without one.
-    if (!recap || !recap[0] || (resume_handle && resume_handle[0])) return true;
+    if (!recap || !recap[0] || (level < 3 && resume_handle && resume_handle[0])) return true;
     cJSON *client = cJSON_CreateObject();
     cJSON *content = cJSON_AddObjectToObject(client,"clientContent");
     cJSON *turns = cJSON_AddArrayToObject(content,"turns");
@@ -115,10 +121,15 @@ static void handle(cJSON *root, const rt_sink_t *sink) {
     if (cJSON_GetObjectItemCaseSensitive(root,"setupComplete")) { sink->ready(); return; }
     cJSON *error = cJSON_GetObjectItemCaseSensitive(root,"error");
     if (cJSON_IsObject(error)) {
+        // Schema detail only; never a payload that might contain user audio.
         cJSON *code = cJSON_GetObjectItemCaseSensitive(error,"code");
-        char text[16] = "unknown";
-        if (cJSON_IsNumber(code)) snprintf(text,sizeof text,"%d",code->valueint);
-        sink->failure("API hatasi: seri log", text);
+        const char *message = string_field(error,"message");
+        static char detail[192];
+        snprintf(detail,sizeof detail,"code=%d status=%s msg=%.110s",
+                 cJSON_IsNumber(code) ? code->valueint : 0,
+                 string_field(error,"status") ? string_field(error,"status") : "-",
+                 message ? message : "-");
+        sink->failure("API hatasi: seri log", detail);
         return;
     }
     cJSON *resume = cJSON_GetObjectItemCaseSensitive(root,"sessionResumptionUpdate");

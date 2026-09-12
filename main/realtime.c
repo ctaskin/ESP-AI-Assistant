@@ -213,10 +213,23 @@ static bool open_session(void) {
     char *recap=heap_caps_malloc(2048,MALLOC_CAP_SPIRAM);
     if (!recap) { ESP_LOGE(TAG,"out of memory"); return false; }
     history_recap(&history,recap,2048);
-    bool sent=prov->setup(ws,recap,resume_handle);
+    // One unsupported field rejects the whole configuration, so ask for less on
+    // each attempt rather than leaving the device without a session.
+    bool ready=false;
+    for (unsigned level=0;level<RT_SETUP_LEVELS && !ready;++level) {
+        xEventGroupClearBits(events,EV_READY|EV_TURN_FAIL);
+        if (!prov->setup(ws,recap,resume_handle,level)) { ESP_LOGE(TAG,"setup send failed"); break; }
+        ready=wait_bits(EV_READY,SETUP_TIMEOUT_MS);
+        if (ready) {
+            if (level) ESP_LOGW(TAG,"session configured without optional fields (level %u)",level);
+        } else {
+            if (xEventGroupGetBits(events)&EV_LINK_DOWN) break;
+            ESP_LOGW(TAG,"setup rejected at level %u; retrying with fewer options",level);
+        }
+    }
     free(recap);
-    if (!sent) { ESP_LOGE(TAG,"setup send failed"); return false; }
-    if (!wait_bits(EV_READY,SETUP_TIMEOUT_MS)) { ESP_LOGE(TAG,"setup timeout"); return false; }
+    if (!ready) { ESP_LOGE(TAG,"setup failed"); return false; }
+    if (ceko_state_get()==CEKO_IDLE) ceko_status_set("hey ceko");
     ESP_LOGI(TAG,"session open (%s), free PSRAM=%u",prov->name,(unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
     return true;
 }
@@ -309,7 +322,17 @@ static void network_task(void *arg) {
             ESP_LOGI(TAG,"renewing session");
             close_session(); session_policy_closed(&policy,now_ms(),false);
             break;
-        default: break;
+        default:
+            // Silence here used to be unexplainable: say what is missing.
+            if (!link_ready()) {
+                static uint64_t announced;
+                if (now_ms()-announced > 5000) {
+                    announced=now_ms();
+                    ESP_LOGI(TAG,"waiting: wifi=%s clock=%s",ceko_wifi_ready()?"ok":"no",
+                             time(NULL)>1700000000?"ok":"no (NTP)");
+                }
+            }
+            break;
         }
         if (xQueueReceive(requests,&u,pdMS_TO_TICKS(200))==pdTRUE) serve(u);
     }

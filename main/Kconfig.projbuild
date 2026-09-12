@@ -59,6 +59,14 @@ config CEKO_OPENAI_MCP_TOKEN
     string "Remote MCP authorization value (optional)"
     depends on CEKO_PROVIDER_OPENAI && CEKO_WEB_SEARCH
     default ""
+config CEKO_OPENAI_HOSTED_WEB_SEARCH
+    bool "Ask for the hosted web_search tool (experimental)"
+    depends on CEKO_PROVIDER_OPENAI && CEKO_WEB_SEARCH
+    default n
+    help
+      Hosted web search is not documented as available on the Realtime
+      endpoint. Accounts that reject it answer session.update with
+      invalid_value, and the session then comes up without any tool.
 
 config CEKO_GEMINI_API_KEY
     string "Google AI Studio API key"
@@ -78,8 +86,8 @@ config CEKO_WEB_SEARCH
     default y
     help
       Gemini uses Google Search on the service side. OpenAI needs a remote MCP
-      search server; without one the experimental hosted web search tool is
-      requested and the session fails visibly if the account rejects it.
+      search server address; without one the assistant has no web access unless
+      the experimental hosted tool below is switched on.
 config CEKO_MEMORY_TURNS
     int "Conversation turns carried across a reconnect (0 = off)"
     range 0 6

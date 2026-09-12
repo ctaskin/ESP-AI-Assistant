@@ -40,7 +40,13 @@ static void wifi_event(void *arg, esp_event_base_t base, int32_t id, void *data)
         atomic_store(&online, false);
         esp_wifi_connect(); // driver scan/connect interval prevents a busy loop
     }
-    if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) atomic_store(&online, true);
+    if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
+        atomic_store(&online, true);
+        // The first SNTP request goes out before the interface has an address
+        // and then backs off for up to a minute. Ask again now that DNS works,
+        // otherwise the first session waits half a minute on the clock.
+        esp_sntp_restart();
+    }
 }
 static void wifi_init(void) {
     ESP_ERROR_CHECK(esp_netif_init());

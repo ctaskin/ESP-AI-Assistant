@@ -35,28 +35,33 @@ static char *auth_header(void) {
 }
 static void add_tools(cJSON *session) {
 #if CONFIG_CEKO_WEB_SEARCH
+    bool hosted = false;
+#if CONFIG_CEKO_OPENAI_HOSTED_WEB_SEARCH
+    // Hosted web search is not documented as available on the Realtime
+    // endpoint; accounts that reject it answer with invalid_value and setup
+    // retries without any tool.
+    hosted = true;
+#endif
+    bool mcp_configured = strlen(CONFIG_CEKO_OPENAI_MCP_URL) > 0;
+    if (!mcp_configured && !hosted) return;      // no web access on this account
     cJSON *tools = cJSON_AddArrayToObject(session,"tools");
-    if (strlen(CONFIG_CEKO_OPENAI_MCP_URL)) {
+    cJSON *tool = cJSON_CreateObject();
+    if (mcp_configured) {
         // The service calls the MCP server itself; the board never makes the request.
-        cJSON *mcp = cJSON_CreateObject();
-        cJSON_AddStringToObject(mcp,"type","mcp");
-        cJSON_AddStringToObject(mcp,"server_label",CONFIG_CEKO_OPENAI_MCP_LABEL);
-        cJSON_AddStringToObject(mcp,"server_url",CONFIG_CEKO_OPENAI_MCP_URL);
-        cJSON_AddStringToObject(mcp,"require_approval","never");
-        if (strlen(CONFIG_CEKO_OPENAI_MCP_TOKEN)) cJSON_AddStringToObject(mcp,"authorization",CONFIG_CEKO_OPENAI_MCP_TOKEN);
-        cJSON_AddItemToArray(tools,mcp);
+        cJSON_AddStringToObject(tool,"type","mcp");
+        cJSON_AddStringToObject(tool,"server_label",CONFIG_CEKO_OPENAI_MCP_LABEL);
+        cJSON_AddStringToObject(tool,"server_url",CONFIG_CEKO_OPENAI_MCP_URL);
+        cJSON_AddStringToObject(tool,"require_approval","never");
+        if (strlen(CONFIG_CEKO_OPENAI_MCP_TOKEN)) cJSON_AddStringToObject(tool,"authorization",CONFIG_CEKO_OPENAI_MCP_TOKEN);
     } else {
-        // Hosted web search on the Realtime endpoint is not documented as GA;
-        // if the account rejects it the session.update fails visibly in the log.
-        cJSON *search = cJSON_CreateObject();
-        cJSON_AddStringToObject(search,"type","web_search");
-        cJSON_AddItemToArray(tools,search);
+        cJSON_AddStringToObject(tool,"type","web_search");
     }
+    cJSON_AddItemToArray(tools,tool);
 #else
     (void)session;
 #endif
 }
-static bool setup(void *ws, const char *recap, const char *resume_handle) {
+static bool setup(void *ws, const char *recap, const char *resume_handle, unsigned level) {
     (void)resume_handle;   // OpenAI has no server side resume; recap carries context
     cJSON *root = cJSON_CreateObject();
     cJSON_AddStringToObject(root,"type","session.update");
@@ -66,7 +71,7 @@ static bool setup(void *ws, const char *recap, const char *resume_handle) {
     cJSON *modalities = cJSON_AddArrayToObject(session,"output_modalities");
     cJSON_AddItemToArray(modalities,cJSON_CreateString("audio"));
     cJSON_AddNumberToObject(session,"max_output_tokens",400);
-    if (strlen(CONFIG_CEKO_REASONING_EFFORT)) {
+    if (level < 2 && strlen(CONFIG_CEKO_REASONING_EFFORT)) {
         cJSON *reasoning = cJSON_AddObjectToObject(session,"reasoning");
         cJSON_AddStringToObject(reasoning,"effort",CONFIG_CEKO_REASONING_EFFORT);
     }
@@ -79,14 +84,16 @@ static bool setup(void *ws, const char *recap, const char *resume_handle) {
 #if CONFIG_CEKO_MEMORY_TURNS > 0
     // Transcripts are only used to rebuild context after a reconnect. They are
     // billed separately; set memory turns to 0 in menuconfig to switch them off.
-    cJSON *transcription = cJSON_AddObjectToObject(input,"transcription");
-    cJSON_AddStringToObject(transcription,"model",CONFIG_CEKO_TRANSCRIBE_MODEL);
+    if (level < 3) {
+        cJSON *transcription = cJSON_AddObjectToObject(input,"transcription");
+        cJSON_AddStringToObject(transcription,"model",CONFIG_CEKO_TRANSCRIBE_MODEL);
+    }
 #endif
     cJSON *output = cJSON_AddObjectToObject(audio,"output");
     cJSON *outf = cJSON_AddObjectToObject(output,"format");
     cJSON_AddStringToObject(outf,"type","audio/pcm"); cJSON_AddNumberToObject(outf,"rate",24000);
     cJSON_AddStringToObject(output,"voice",CONFIG_CEKO_VOICE);
-    add_tools(session);
+    if (level < 1) add_tools(session);
     if (!rt_send_json(ws,root)) return false;
     if (!recap || !recap[0]) return true;
     cJSON *item_root = cJSON_CreateObject();
@@ -116,13 +123,20 @@ static const char *string_field(cJSON *object, const char *key) {
     cJSON *x = cJSON_GetObjectItemCaseSensitive(object,key);
     return cJSON_IsString(x) ? x->valuestring : NULL;
 }
+static const char *text_or(const char *s) { return s ? s : "-"; }
 static void handle(cJSON *root, const rt_sink_t *sink) {
     const char *type = string_field(root,"type");
     if (!type) return;
     if (!strcmp(type,"session.updated")) { sink->ready(); return; }
     if (!strcmp(type,"error")) {
-        // Log only the error code, never a payload that might contain user audio.
-        sink->failure("API hatasi: seri log", string_field(cJSON_GetObjectItemCaseSensitive(root,"error"),"code"));
+        // Schema detail only: type, code, the rejected field and the service
+        // message. Never a payload that might contain user audio.
+        cJSON *err = cJSON_GetObjectItemCaseSensitive(root,"error");
+        static char detail[224];
+        snprintf(detail,sizeof detail,"%s/%s param=%s msg=%.110s",
+                 text_or(string_field(err,"type")), text_or(string_field(err,"code")),
+                 text_or(string_field(err,"param")), text_or(string_field(err,"message")));
+        sink->failure("API hatasi: seri log", detail);
         return;
     }
     if (!strcmp(type,"response.output_audio.delta") || !strcmp(type,"response.audio.delta")) {

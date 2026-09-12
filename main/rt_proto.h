@@ -18,6 +18,10 @@ typedef struct {
     void (*usage)(int total_tokens);
 } rt_sink_t;
 
+// Setup levels: 0 asks for everything, each further level drops the optional
+// fields a strict account or model may reject, so a session still comes up.
+#define RT_SETUP_LEVELS 4
+
 typedef struct {
     const char *name;
     unsigned send_rate, recv_rate;   // PCM sample rates this service expects/produces
@@ -26,7 +30,7 @@ typedef struct {
     const char *(*config_error)(void);          // NULL when menuconfig values are usable
     bool (*uri)(char *out, size_t cap);
     char *(*auth_header)(void);                 // malloc'd or NULL when unused
-    bool (*setup)(void *ws, const char *recap, const char *resume_handle);
+    bool (*setup)(void *ws, const char *recap, const char *resume_handle, unsigned level);
     bool (*turn_begin)(void *ws);
     bool (*audio_chunk)(void *ws, const char *b64);
     bool (*turn_end)(void *ws);

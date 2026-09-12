@@ -67,7 +67,9 @@ static bool mn_feed(const int16_t *pcm, size_t n) {
 static void recognition_task(void *arg) {
     const size_t capacity = CONFIG_CEKO_MAX_RECORD_SECONDS * 16000U;
     mn_size = mn->get_samp_chunksize(mn_data);
-    mn_buf = heap_caps_malloc(mn_size*2, MALLOC_CAP_SPIRAM);
+    // Internal RAM: the recognizer reads this buffer on every frame and PSRAM
+    // access is slow enough to push detection behind real time.
+    mn_buf = heap_caps_malloc(mn_size*2, MALLOC_CAP_INTERNAL);
     assert(mn_buf);
     size_t used = 0;
     capture_gate_t gate;

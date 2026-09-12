@@ -31,8 +31,8 @@
   `GTS Root R4` var, çapraz imzayı atan eski `GlobalSign Root CA` yok. Seçenek kapalıyken
   paket sahte bir CA zinciri kurup yalnızca son sertifikanın vericisini arıyor; açıkken
   `mbedtls_ssl_conf_ca_cb` ile her seviyede aday kök sorulup `GTS Root R4` bulunuyor.
-  `CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_CROSS_SIGNED_VERIFY=y` yapıldı. Kart üzerinde
-  el sıkışmanın geçtiği **henüz doğrulanmadı**.
+  `CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_CROSS_SIGNED_VERIFY=y` yapıldı. **Kartta doğrulandı:**
+  sonraki çalıştırmada sertifika hatası kayboldu ve WebSocket el sıkışması tamamlandı.
 - **Kaybolan ayar:** Bu hata daha önce menuconfig ile çözülmüştü, ancak ayar yalnızca
   izlenmeyen `sdkconfig` dosyasındaydı; hedef düzeltmesi için o dosya silinince geri geldi.
   Ayar artık `sdkconfig.defaults` içinde ve kapalıysa derleme başında uyarı veriliyor.
@@ -43,6 +43,21 @@
   kapsandı. Gerçek algılama başarısı ve konuşma sırasındaki çekirdek yükü **ölçülmedi**.
 - Wi-Fi, NTP, ES8311/I2S başlatma, MultiNet model yüklemesi ve yüz görevleri logda
   sorunsuz göründü. Ses giriş/çıkış kalitesi ve uyandırma başarısı hâlâ denenmedi.
+
+## TLS sonrası çıkan durum (aynı gün, ikinci çalıştırma)
+
+- **`session.update` reddediliyor:** `error code=invalid_value`. Hangi alanın reddedildiği
+  loglanmıyordu; hata çıktısına artık `type`, `code`, `param` ve servis mesajı ekleniyor
+  (ses içeriği değil, yalnızca şema bilgisi). Kurulum ayrıca kademeli hale getirildi:
+  araçsız → akıl yürütmesiz → transkripsiyonsuz. Reddedilen alanın hangisi olduğu
+  **henüz bilinmiyor**; en olası aday, belgelenmemiş hosted `web_search` aracıdır ve
+  artık varsayılan olarak istenmiyor.
+- **Saat beklemesi:** İlk bağlantı ancak ~36. saniyede denendi. SNTP, arayüz adres almadan
+  önce ilk isteğini gönderip geri çekiliyordu; adres gelince `esp_sntp_restart()` çağrılıyor.
+  Ayrıca bekleme artık sessiz değil: `waiting: wifi=... clock=...` satırı basılıyor.
+- **AFE taşması sürüyor:** Konuşma sırasında `Ringbuffer of AFE(FEED) is full` yine çıkıyor,
+  yani MultiNet konuşurken hâlâ gerçek zamanın gerisinde. Tanıyıcı tamponu iç RAM'e alındı;
+  bu tek başına yetmezse kalıcı çözüm WakeNet aşamasıdır. Watchdog uyarısı kesildi.
 
 ## ESP-IDF 6.1 geçişi ve repoya girmiş yanlış derleme durumu
 
