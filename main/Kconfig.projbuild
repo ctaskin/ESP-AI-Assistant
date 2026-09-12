@@ -105,6 +105,21 @@ config CEKO_WAKE_CONFIDENCE
     int "Wake confidence percent"
     range 50 99
     default 85
+config CEKO_WAKE_MIN_LEVEL
+    int "Run the recognizer above this microphone level percent (0 = always)"
+    range 0 50
+    default 2
+    help
+      The recognizer cannot run on every frame in real time, so it only runs
+      while the local VAD reports speech or the microphone level is above this
+      value. 0 runs it continuously, which overloads core 1.
+config CEKO_BOOT_BUTTON
+    bool "BOOT button (GPIO0) starts listening"
+    default y
+    help
+      Bring-up aid: press BOOT while idle to start listening without the wake
+      word. There is no touch input in this firmware.
+
 config CEKO_SILENCE_MS
     int "End utterance after silence (ms)"
     range 400 3000

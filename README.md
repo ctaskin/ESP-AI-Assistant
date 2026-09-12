@@ -10,6 +10,7 @@
    Komut tanıyıcı sürekli çalışmaz: yalnızca yerel VAD konuşma duyduğunda devreye girer ve
    öncesindeki 300 ms tamponu da modele verilir.
 3. “Hey ceko” algılanınca gözler büyür ve yeşile döner. `Dinliyorum` görünür.
+   Uyandırma tutmazsa **BOOT düğmesine** basmak da dinlemeyi başlatır (bring-up için).
 4. Bundan sonraki konuşma alınır; 1 saniyelik sessizlikte kayıt tamamlanır.
 5. Ses, **açılışta kurulmuş ve açık tutulan** WebSocket oturumundan gönderilir.
    Yanıt geldikçe hoparlörden çalınır.
@@ -38,6 +39,8 @@ belgelenmiş değil; varsayılan olarak istenmiyor (menüden deneysel olarak aç
   MultiNet7 bu yongada gerçek zamanlı olarak *sürekli* çalışamıyor (çekirdek 1 doluyor ve
   AFE tamponu taşıyor), bu yüzden yalnızca konuşma duyulduğunda çalıştırılıyor. Sessiz
   odada işlemci yükü yok denecek kadar az; konuşurken çekirdek 1 yine doluyor.
+- **Dokunmatik yok:** Ekran dokunmatik olsa da bu firmware'de dokunmatik sürücüsü
+  **uygulanmadı**. Girişler: uyandırma sözcüğü ve BOOT düğmesi.
 - **Yarı çift yönlü:** Ceko cevap verirken mikrofon işlenip atılır. Kendi sesine uyanmaz;
   fakat konuşurken sözünü kesme yoktur. Bu sürümde akustik yankı giderme kapalıdır.
 - **Gemini yolu doğrulanmadı:** Gemini Live mesaj alanları dokümantasyondan yazıldı,
@@ -145,6 +148,25 @@ yürütme alanı olmadan, en sonda transkripsiyon olmadan. Logdaki `param=` hang
 reddedildiğini söyler; `session configured without optional fields (level N)` satırı da hangi
 kademede bağlanıldığını gösterir. Kalıcı çözüm için o alanı `menuconfig`'den kapat.
 
+**Uyandırma hiç tetiklenmiyor**
+Seri logda beş saniyede bir şu satır basılır:
+
+```
+speech: idle: 78000 ornek, 12000 konusma, tepe 34%, 96 model parcasi
+```
+
+- `tepe %0-1` ise mikrofon veri üretmiyor: I2S slot/kazanç/pinleri kontrol et
+  (`menuconfig > Ceko > Use right I2S microphone slot`).
+- `konusma 0` ama tepe yüksekse VAD açılmıyor; `Run the recognizer above this
+  microphone level percent` değerini düşür.
+- `model parcasi` artıyorsa tanıyıcı çalışıyor ama eşleşme yok. Konuşurken
+  `MultiNet candidate: id=1 prob=0.62 threshold=0.85` satırı çıkarsa yazım tutuyor
+  demektir, güven eşiğini düşür. Hiç çıkmıyorsa `hey jeko` yazımı Türkçe telaffuzu
+  yakalamıyor; kalıcı çözüm WakeNet aşamasıdır.
+
+Bu sırada uçtan uca akışı **BOOT düğmesiyle** deneyebilirsin: bas, soruyu sor,
+sessizlikte kayıt kapanır ve yanıt hoparlörden çalınır.
+
 **`Hedef yonga 'esp32'`** Repoya daha önce `CONFIG_IDF_TARGET="esp32"` içeren bir
 `sdkconfig` girmişti ve derlemeyi yanlış yongaya yönlendiriyordu. Dosya artık
 izlenmiyor; yukarıdaki `set-target` komutu doğrusunu üretir.
@@ -188,6 +210,8 @@ TLS sertifika kontrolü açıktır, sistem saati NTP ile ayarlanır. Sertifika k
 | Web araması | Açık | Gemini'de Google araması hazır; OpenAI'de uzak MCP sunucusu adresi gerekir |
 | Bağlam taşıma | 4 tur | Kopma/yenileme sonrası taşınan tur sayısı; 0 kapatır |
 | Uyandırma yazımı | `hey jeko` | Türkçe ceko için deneysel İngilizce yazım |
+| Tanıyıcı eşiği | %2 mikrofon seviyesi | Altında model çalışmaz; 0 sürekli çalıştırır |
+| BOOT düğmesi | Açık | Beklerken basınca dinlemeye geçer |
 | Güven eşiği | %85 | Yanlış uyanma/kaçırma dengesi |
 | Sessizlik | 1000 ms | Sorunun bittiğine karar verme |
 | Maksimum kayıt | 20 saniye | RAM ve kullanım sınırı; aşılırsa kayıt gönderilmez |

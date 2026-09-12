@@ -59,6 +59,21 @@
   yani MultiNet konuşurken hâlâ gerçek zamanın gerisinde. Tanıyıcı tamponu iç RAM'e alındı;
   bu tek başına yetmezse kalıcı çözüm WakeNet aşamasıdır. Watchdog uyarısı kesildi.
 
+## Üçüncü çalıştırma: oturum açıldı, giriş yolu yok
+
+- **Doğrulandı:** `realtime: session open (openai)` — TLS, `session.update` ve tüm
+  seçenekler (kademe 0, yani `reasoning.effort` ve transkripsiyon dahil) kabul edildi.
+  Watchdog ve AFE taşma uyarıları da bu çalıştırmada çıkmadı.
+- **Uyandırma hiçbir çalıştırmada tetiklenmedi.** Handoff'ta baştan işaretlenen risk
+  gerçekleşti: İngilizce MultiNet7 ile `hey jeko` yazımı Türkçe telaffuzu yakalamıyor
+  olabilir; mikrofon verisi de henüz bağımsız doğrulanmadı. Bu yüzden beş saniyede bir
+  örnek/konuşma/tepe seviye/model parçası sayıları loglanıyor ve eşiğin altındaki
+  MultiNet adayları da yazdırılıyor.
+- **Dokunmatik yok:** Bu firmware'de dokunmatik sürücüsü hiç uygulanmadı; "touch
+  dinlemeyi başlatıyor" doğru değil. Bring-up için BOOT (GPIO0) düğmesi eklendi.
+- Tanıyıcı kapısı artık yalnızca VAD'a bağlı değil: mikrofon seviyesi eşiği de kabul
+  ediyor, böylece VAD hiç açılmasa bile model çalışabiliyor.
+
 ## ESP-IDF 6.1 geçişi ve repoya girmiş yanlış derleme durumu
 
 Proje ESP-IDF **6.1** ile derleniyor (`.vscode/settings.json` ve `dependencies.lock`

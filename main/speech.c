@@ -1,4 +1,5 @@
 #include "ceko.h"
+#include "audio_math.h"
 #include "capture_gate.h"
 #include "wake_gate.h"
 #include <string.h>
@@ -7,11 +8,15 @@
 #include "freertos/task.h"
 #include "esp_heap_caps.h"
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "esp_afe_sr_iface.h"
 #include "esp_afe_sr_models.h"
 #include "esp_mn_models.h"
 #include "esp_mn_speech_commands.h"
 #include "model_path.h"
+#if CONFIG_CEKO_BOOT_BUTTON
+#include "driver/gpio.h"
+#endif
 
 // 300 ms of speech before the VAD opens, and 1 s of silence before the
 // recognizer is put back to sleep.
@@ -27,6 +32,7 @@ static wake_gate_t wake;
 static int16_t *mn_buf;
 static int mn_size;
 static size_t mn_filled;
+static uint32_t mn_chunks;
 
 static void microphone_task(void *arg) {
     int n = afe->get_feed_chunksize(afe_data);
@@ -51,17 +57,40 @@ static bool mn_feed(const int16_t *pcm, size_t n) {
         memcpy(mn_buf+mn_filled, pcm+pos, take*2);
         mn_filled += take; pos += take;
         if (mn_filled != (size_t)mn_size) continue;
-        mn_filled = 0;
+        mn_filled = 0; ++mn_chunks;
         esp_mn_state_t result = mn->detect(mn_data, mn_buf);
         if (result == ESP_MN_STATE_DETECTED) {
             esp_mn_results_t *hits = mn->get_results(mn_data);
             bool hit = hits && hits->num > 0 && hits->command_id[0] == 1 &&
                 hits->prob[0] >= CONFIG_CEKO_WAKE_CONFIDENCE / 100.0f;
+            // Log every candidate, including the ones below the threshold: a
+            // near miss is the evidence needed to tune spelling or confidence.
+            if (hits && hits->num > 0)
+                ESP_LOGI("speech", "MultiNet candidate: id=%d prob=%.2f threshold=%.2f",
+                         hits->command_id[0], hits->prob[0], CONFIG_CEKO_WAKE_CONFIDENCE/100.0f);
             mn->clean(mn_data);
             if (hit) return true;
         } else if (result == ESP_MN_STATE_TIMEOUT) mn->clean(mn_data);
     }
     return false;
+}
+
+// Silence on the serial log used to be indistinguishable from a dead
+// microphone. Report what the recognizer actually sees.
+static void report_idle(size_t n, bool speech, int level) {
+    static uint32_t frames, voiced;
+    static int peak;
+    static int64_t last;
+    frames += n;
+    if (speech) voiced += n;
+    if (level > peak) peak = level;
+    int64_t now = esp_timer_get_time();
+    if (!last) last = now;
+    if (now - last < 5000000) return;
+    last = now;
+    ESP_LOGI("speech", "idle: %u ornek, %u konusma, tepe %d%%, %u model parcasi",
+             (unsigned)frames, (unsigned)voiced, peak, (unsigned)mn_chunks);
+    frames = voiced = mn_chunks = 0; peak = 0;
 }
 
 static void recognition_task(void *arg) {
@@ -91,8 +120,13 @@ static void recognition_task(void *arg) {
             // Experimental command spotting. This is not a trained Turkish
             // WakeNet model; it is MultiNet driven by the local VAD so it does
             // not run during silence, and it needs on-device tuning.
+            // Energy is always available; the VAD alone would silence the
+            // recognizer completely if it never reported speech.
+            int level = audio_level(r->data, n);
+            bool active = r->vad_state == VAD_SPEECH || level >= CONFIG_CEKO_WAKE_MIN_LEVEL;
+            report_idle(n, active, level);
             bool hit = false;
-            switch (wake_gate_step(&wake, r->data, n, r->vad_state == VAD_SPEECH)) {
+            switch (wake_gate_step(&wake, r->data, n, active)) {
             case WAKE_FLUSH:
                 hit = mn_feed(wake.pcm, wake.fill);
                 wake_gate_consumed(&wake);
@@ -131,6 +165,25 @@ static void recognition_task(void *arg) {
         // During THINK/SPEAK, AFE is drained but no microphone samples leave device.
     }
 }
+
+#if CONFIG_CEKO_BOOT_BUTTON
+// GPIO0 is the BOOT button on this board. Pressing it while running is
+// harmless; only holding it through a reset enters download mode.
+static void button_task(void *arg) {
+    gpio_config_t cfg = { .pin_bit_mask = 1ULL << 0, .mode = GPIO_MODE_INPUT, .pull_up_en = GPIO_PULLUP_ENABLE };
+    ESP_ERROR_CHECK(gpio_config(&cfg));
+    bool was_down = false;
+    for (;;) {
+        bool down = gpio_get_level(0) == 0;
+        if (down && !was_down && ceko_state_get() == CEKO_IDLE) {
+            ESP_LOGI("speech", "BOOT button: listening");
+            ceko_status_set("Dinliyorum"); ceko_state_set(CEKO_LISTEN);
+        }
+        was_down = down;
+        vTaskDelay(pdMS_TO_TICKS(50));
+    }
+}
+#endif
 
 void speech_start(void) {
     srmodel_list_t *models = esp_srmodel_init("model");
@@ -171,6 +224,9 @@ void speech_start(void) {
     ESP_LOGI("speech", "Ready: model=%s, free internal=%u PSRAM=%u bytes", name,
              (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
              (unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
+#if CONFIG_CEKO_BOOT_BUTTON
+    assert(xTaskCreate(button_task, "button", 2560, NULL, 3, NULL) == pdPASS);
+#endif
     assert(xTaskCreatePinnedToCore(microphone_task, "mic", 4096, NULL, 7, NULL, 0) == pdPASS);
     assert(xTaskCreatePinnedToCore(recognition_task, "wake_capture", 8192, NULL, 5, NULL, 1) == pdPASS);
 }
