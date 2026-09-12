@@ -26,7 +26,7 @@ ilk yanıt gecikmesine eklenmiyor.
 | Ses girişi | $32 / 1M token | $10 / 1M | $3 / 1M |
 | Ses çıkışı | $64 / 1M token | $20 / 1M | $12 / 1M |
 | Token/saniye (ses) | ~10 giriş / ~20 çıkış | aynı | 32 giriş / 25 çıkış |
-| Web araması | Yerleşik araç Realtime'da GA belgelenmiş değil; uzak MCP sunucusu veya kendi fonksiyonun gerekir | aynı | `tools:[{googleSearch:{}}]` — sunucu tarafında, ek altyapı yok |
+| Web araması | Yerleşik araç Realtime'da belgelenmiş değil; uzak MCP sunucusu gerekir (varsayılan: Exa'nın anahtarsız uç noktası) | aynı | `tools:[{googleSearch:{}}]` — sunucu tarafında, ek altyapı yok |
 | Oturum ömrü | 60 dakika (Azure'da 30) | aynı | Ses-only 15 dk; bağlam sıkıştırmasıyla sınırsız, bağlantı ~10 dk'da yenilenir |
 | Bağlam taşıma | Sunucu tarafı devam yok; yeniden bağlanınca özet göndermek gerekir | aynı | `sessionResumption` handle'ı ile sunucuda devam |
 | Cihaz tarafı ses | 24 kHz'e çevirmek gerekiyor | aynı | 16 kHz doğrudan kabul ediliyor; ESP32'de yeniden örnekleme yok |
@@ -46,10 +46,11 @@ fiyatlanır ama bedava değildir. Hafızayı `menuconfig` üzerinden kısabilirs
   bir anahtar veya ev içinde açık duran bir backend gerekmez. Üstelik ses çıkışı
   OpenAI mini'nin bile üçte biri fiyatında ve giriş sesi 16 kHz kabul edildiği için
   ESP32 bir dönüşüm işinden kurtulur.
-- **OpenAI'de kalmak istersen** varsayılan artık `gpt-realtime-2.1`. Arama için
-  ya uzak bir MCP arama sunucusu adresi girmen ya da deneysel hosted `web_search`
-  aracının hesabında çalışmasını ummanız gerekir. Gemini tarafındaki `googleSearch`
-  kadar kesin bir yol değildir.
+- **OpenAI'de kalmak istersen** varsayılan artık `gpt-realtime-2.1`. Arama uzak MCP
+  sunucusu üzerinden yapılıyor; varsayılan olarak Exa'nın barındırdığı anahtarsız uç
+  nokta (`https://mcp.exa.ai/mcp`) tanımlı. Bu, sorularının üçüncü bir servise
+  ulaşması demektir; Gemini'de arama Google'ın kendi tarafında kalır.
+  Deneysel hosted `web_search` aracı bu hesapta `invalid_value` ile reddedildi.
 - Türkçe ses kalitesi ve gerçek gecikme **iki serviste de bu projede ölçülmedi.**
   Karar vermeden önce ikisini de aynı sorularla dene: `menuconfig > Ceko > Realtime
   voice service` seçeneği tek değişiklikle geçiş yapar.

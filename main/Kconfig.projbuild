@@ -50,13 +50,19 @@ config CEKO_TRANSCRIBE_MODEL
 config CEKO_OPENAI_MCP_URL
     string "Remote MCP server URL for search (empty = no web access)"
     depends on CEKO_PROVIDER_OPENAI && CEKO_WEB_SEARCH
-    default ""
+    default "https://mcp.exa.ai/mcp"
+    help
+      OpenAI Realtime has no dependable built-in web search, so the search
+      runs on a remote MCP server that OpenAI calls on its own. The default
+      is Exa's hosted endpoint, which needs no key on a rate limited free
+      plan. Questions the model chooses to search for reach that service;
+      empty this field to keep Ceko offline, or point it at another server.
 config CEKO_OPENAI_MCP_LABEL
     string "Remote MCP server label"
     depends on CEKO_PROVIDER_OPENAI && CEKO_WEB_SEARCH
-    default "search"
+    default "exa"
 config CEKO_OPENAI_MCP_TOKEN
-    string "Remote MCP authorization value (optional)"
+    string "Remote MCP bearer token (optional)"
     depends on CEKO_PROVIDER_OPENAI && CEKO_WEB_SEARCH
     default ""
 config CEKO_OPENAI_HOSTED_WEB_SEARCH

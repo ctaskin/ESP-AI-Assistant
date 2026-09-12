@@ -22,10 +22,33 @@
 Bilgisayar/bridge açık kalmadan, kart Wi-Fi üzerinden doğrudan servise bağlanır.
 
 **Servis seçimi:** `menuconfig > Ceko > Realtime voice service` ile OpenAI Realtime
-veya Google Gemini Live seçilir. Güncel bilgi gerektiren sorular için Gemini'de
-Google araması servis tarafında çalışır; OpenAI'de uzak bir MCP arama sunucusu
-adresi girmek gerekir. OpenAI'nin hosted `web_search` aracı Realtime uç noktasında
-belgelenmiş değil; varsayılan olarak istenmiyor (menüden deneysel olarak açılabilir). Karşılaştırma, fiyatlar ve gerekçe: `docs/PROVIDERS.md`.
+veya Google Gemini Live seçilir. Karşılaştırma, fiyatlar ve gerekçe: `docs/PROVIDERS.md`.
+
+### Web araması
+
+Aramayı her iki durumda da **servis yapar**; kart ikinci bir bağlantı açmaz.
+
+- **Gemini Live:** `googleSearch` aracı oturumda açık. Ek ayar yok.
+- **OpenAI Realtime:** Uç noktada güvenilir bir yerleşik arama aracı yok; arama uzak bir
+  **MCP sunucusu** üzerinden yapılır ve OpenAI o sunucuyu kendisi çağırır. Varsayılan
+  `https://mcp.exa.ai/mcp` (Exa'nın barındırdığı uç nokta; hız sınırlı ücretsiz planda
+  anahtar istemiyor). Modelin aramaya karar verdiği sorular bu servise ulaşır — istemiyorsan
+  `menuconfig > Ceko > Remote MCP server URL` alanını boşalt, Ceko çevrimdışı kalır.
+  Kendi MCP sunucunu (Tavily, Brave, kendi kurduğun) adres ve gerekiyorsa bearer token
+  girerek kullanabilirsin.
+
+Çalıştığını seri logdan görürsün:
+
+```
+realtime: tool: mcp_list_tools.in_progress      (oturum acilirken arac listesi)
+realtime: tool: response.mcp_call.in_progress   (soru sirasinda arama)
+```
+
+Araç bağlıyken model talimatına "güncel bilgi gerekirse aramayı kullan ve kaynağı söyle"
+cümlesi ekleniyor; bağlı değilken eklenmiyor, böylece olmayan bir aracı kullanmaya
+çalışmıyor. MCP sunucusu ulaşılamazsa `session.update` reddedilir ve kurulum bir kademe
+geri düşüp **araçsız** devam eder — logda `session configured without optional fields`
+satırı görünür.
 
 ## Önce bilmen gereken sınırlar
 
@@ -203,7 +226,7 @@ TLS sertifika kontrolü açıktır, sistem saati NTP ile ayarlanır. Sertifika k
 | Servis | OpenAI Realtime | Gemini Live ile değiştirilebilir |
 | Model | `gpt-realtime-2.1` | Mini'ye göre daha iyi cevap, ~3 kat ses maliyeti |
 | Akıl yürütme | `low` | Gecikmeyi düşük tutar; boş bırakılırsa alan gönderilmez |
-| Web araması | Açık | Gemini'de Google araması hazır; OpenAI'de uzak MCP sunucusu adresi gerekir |
+| Web araması | Açık | Gemini'de `googleSearch`; OpenAI'de MCP sunucusu (varsayılan Exa) |
 | Bağlam taşıma | 4 tur | Kopma/yenileme sonrası taşınan tur sayısı; 0 kapatır |
 | Uyandırma sözcüğü | `Hi ESP` (WakeNet9 `wn9_hiesp`) | ESP Speech Recognition menüsünden seçilir |
 | Uyandırma eşiği | 0 (model varsayılanı) | 40-99 ile elle bastırılabilir |

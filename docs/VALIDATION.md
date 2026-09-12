@@ -59,6 +59,18 @@
   yani MultiNet konuşurken hâlâ gerçek zamanın gerisinde. Tanıyıcı tamponu iç RAM'e alındı;
   bu tek başına yetmezse kalıcı çözüm WakeNet aşamasıdır. Watchdog uyarısı kesildi.
 
+## Web araması
+
+Kartta doğrulanan: `session open` sonrası sohbet bağlamı turlar arasında korunuyor.
+Arama ise hiç çalışmıyordu, çünkü OpenAI tarafında hiçbir araç gönderilmiyordu: hosted
+`web_search` bu hesapta `invalid_value` ile reddedilmişti ve MCP adresi boştu.
+
+Artık `CEKO_OPENAI_MCP_URL` varsayılan olarak Exa'nın barındırdığı anahtarsız uç noktaya
+işaret ediyor ve araç bağlıyken model talimatına aramayı kullanmasını söyleyen bir cümle
+ekleniyor. MCP çağrı olayları (`mcp_list_tools`, `response.mcp_call.*`) loglanıyor.
+**Kartta henüz denenmedi**; Exa uç noktasının OpenAI tarafından kabul edildiği ve gerçek
+bir aramanın döndüğü doğrulanmalı.
+
 ## claude/wizardly-albattani-0tc3dm dalının birleştirilmesi
 
 Paralel bir dalda yapılmış ve bu dalda bulunmayan işler tek tek taşındı:

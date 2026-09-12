@@ -11,6 +11,11 @@
 #define OPENAI_SESSION_MS (60ULL*60*1000)
 #define OPENAI_RENEW_MARGIN_MS (5ULL*60*1000)
 
+// Appended only when a search tool is actually attached, so the model is never
+// told to use a tool it does not have.
+static const char SEARCH_HINT[] =
+    " Guncel bilgi, tarih, fiyat veya haber gerektiginde web arama aracini kullan "
+    "ve kaynagi kisaca soyle. Aramadan emin olamadigin guncel bilgiyi uydurma.";
 static const char INSTRUCTIONS[] =
     "Adin Ceko. Turkce konusan sicak, dogal bir masaustu sesli asistansin. "
     "Turkce cevap ver. Kullanici baska bir dil isterse o dili kullan. "
@@ -33,27 +38,40 @@ static char *auth_header(void) {
     if (h) sprintf(h,"Authorization: Bearer %s\r\n",key);
     return h;
 }
+// Realtime supports remote MCP servers and custom functions. A hosted
+// web_search tool is not documented for this endpoint, so the MCP server is the
+// dependable route; the board never makes the search request itself.
+static bool search_tool_enabled(void) {
+#if CONFIG_CEKO_WEB_SEARCH
+#if CONFIG_CEKO_OPENAI_HOSTED_WEB_SEARCH
+    return true;
+#else
+    return strlen(CONFIG_CEKO_OPENAI_MCP_URL) > 0;
+#endif
+#else
+    return false;
+#endif
+}
 static void add_tools(cJSON *session) {
 #if CONFIG_CEKO_WEB_SEARCH
-    bool hosted = false;
-#if CONFIG_CEKO_OPENAI_HOSTED_WEB_SEARCH
-    // Hosted web search is not documented as available on the Realtime
-    // endpoint; accounts that reject it answer with invalid_value and setup
-    // retries without any tool.
-    hosted = true;
-#endif
-    bool mcp_configured = strlen(CONFIG_CEKO_OPENAI_MCP_URL) > 0;
-    if (!mcp_configured && !hosted) return;      // no web access on this account
+    if (!search_tool_enabled()) return;          // no web access configured
     cJSON *tools = cJSON_AddArrayToObject(session,"tools");
     cJSON *tool = cJSON_CreateObject();
-    if (mcp_configured) {
-        // The service calls the MCP server itself; the board never makes the request.
+    if (strlen(CONFIG_CEKO_OPENAI_MCP_URL)) {
         cJSON_AddStringToObject(tool,"type","mcp");
         cJSON_AddStringToObject(tool,"server_label",CONFIG_CEKO_OPENAI_MCP_LABEL);
         cJSON_AddStringToObject(tool,"server_url",CONFIG_CEKO_OPENAI_MCP_URL);
         cJSON_AddStringToObject(tool,"require_approval","never");
-        if (strlen(CONFIG_CEKO_OPENAI_MCP_TOKEN)) cJSON_AddStringToObject(tool,"authorization",CONFIG_CEKO_OPENAI_MCP_TOKEN);
+        if (strlen(CONFIG_CEKO_OPENAI_MCP_TOKEN)) {
+            // Documented form: a bearer token in the request headers.
+            char bearer[256];
+            snprintf(bearer,sizeof bearer,"Bearer %s",CONFIG_CEKO_OPENAI_MCP_TOKEN);
+            cJSON *headers = cJSON_AddObjectToObject(tool,"headers");
+            cJSON_AddStringToObject(headers,"Authorization",bearer);
+        }
     } else {
+        // Experimental: accounts that reject it answer invalid_value and setup
+        // retries without any tool.
         cJSON_AddStringToObject(tool,"type","web_search");
     }
     cJSON_AddItemToArray(tools,tool);
@@ -67,7 +85,13 @@ static bool setup(void *ws, const char *recap, const char *resume_handle, unsign
     cJSON_AddStringToObject(root,"type","session.update");
     cJSON *session = cJSON_AddObjectToObject(root,"session");
     cJSON_AddStringToObject(session,"type","realtime");
-    cJSON_AddStringToObject(session,"instructions",INSTRUCTIONS);
+    if (level < 1 && search_tool_enabled()) {
+        char instructions[sizeof INSTRUCTIONS + sizeof SEARCH_HINT];
+        snprintf(instructions,sizeof instructions,"%s%s",INSTRUCTIONS,SEARCH_HINT);
+        cJSON_AddStringToObject(session,"instructions",instructions);
+    } else {
+        cJSON_AddStringToObject(session,"instructions",INSTRUCTIONS);
+    }
     cJSON *modalities = cJSON_AddArrayToObject(session,"output_modalities");
     cJSON_AddItemToArray(modalities,cJSON_CreateString("audio"));
     cJSON_AddNumberToObject(session,"max_output_tokens",400);
@@ -154,8 +178,10 @@ static void handle(cJSON *root, const rt_sink_t *sink) {
         if (text) sink->user_text(text);
         return;
     }
-    if (!strcmp(type,"response.mcp_call.in_progress") || !strcmp(type,"response.web_search_call.in_progress")) {
-        ESP_LOGI(TAG,"tool call in progress");
+    if (!strncmp(type,"response.mcp_call",17) || !strncmp(type,"mcp_list_tools",14) ||
+        !strcmp(type,"response.web_search_call.in_progress")) {
+        // Visible proof that the search tool is reachable and being used.
+        ESP_LOGI(TAG,"tool: %s",type);
         return;
     }
     if (!strcmp(type,"response.done")) {
