@@ -14,6 +14,11 @@
 #include "esp_mn_models.h"
 #include "esp_mn_speech_commands.h"
 #include "model_path.h"
+
+// See rt_proto.h: keep building when sdkconfig has not caught up yet.
+#ifndef CONFIG_CEKO_WAKE_MIN_LEVEL
+#define CONFIG_CEKO_WAKE_MIN_LEVEL 2
+#endif
 #if CONFIG_CEKO_BOOT_BUTTON
 #include "driver/gpio.h"
 #endif

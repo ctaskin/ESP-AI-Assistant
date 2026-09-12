@@ -167,6 +167,15 @@ speech: idle: 78000 ornek, 12000 konusma, tepe 34%, 96 model parcasi
 Bu sırada uçtan uca akışı **BOOT düğmesiyle** deneyebilirsin: bas, soruyu sor,
 sessizlikte kayıt kapanır ve yanıt hoparlörden çalınır.
 
+**`CONFIG_CEKO_... undeclared` derleme hatası**
+`menuconfig` seçenekleri değiştiğinde `sdkconfig` yalnızca CMake yeniden çalışırken
+üretilir. Düz `ninja` (VS Code eklentisinin build düğmesi dahil) bunu tetiklemez.
+Depoyu güncelledikten sonra bir kez:
+
+```sh
+idf.py reconfigure && idf.py build
+```
+
 **`Hedef yonga 'esp32'`** Repoya daha önce `CONFIG_IDF_TARGET="esp32"` içeren bir
 `sdkconfig` girmişti ve derlemeyi yanlış yongaya yönlendiriyordu. Dosya artık
 izlenmiyor; yukarıdaki `set-target` komutu doğrusunu üretir.

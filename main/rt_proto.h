@@ -1,8 +1,22 @@
 #pragma once
+#include "sdkconfig.h"
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 #include "cJSON.h"
+
+// A stale sdkconfig (for example after a plain ninja build, which does not
+// regenerate it) leaves newly added options undefined. Fall back to the
+// Kconfig defaults so only the setting is lost, never the build.
+#ifndef CONFIG_CEKO_MEMORY_TURNS
+#define CONFIG_CEKO_MEMORY_TURNS 4
+#endif
+#ifndef CONFIG_CEKO_REASONING_EFFORT
+#define CONFIG_CEKO_REASONING_EFFORT "low"
+#endif
+#ifndef CONFIG_CEKO_TRANSCRIBE_MODEL
+#define CONFIG_CEKO_TRANSCRIBE_MODEL "gpt-4o-mini-transcribe"
+#endif
 
 // Everything the transport in realtime.c needs to talk to one voice service.
 // Two implementations exist: rt_openai.c and rt_gemini.c; the active one is
