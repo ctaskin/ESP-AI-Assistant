@@ -21,6 +21,10 @@ static SemaphoreHandle_t status_lock;
 static char status[80] = "Basliyorum";
 void ceko_state_set(ceko_state_t s) { atomic_store(&state, s); }
 ceko_state_t ceko_state_get(void) { return atomic_load(&state); }
+bool ceko_state_try_listen(void) {
+    int expected = CEKO_IDLE;
+    return atomic_compare_exchange_strong(&state, &expected, CEKO_LISTEN);
+}
 void ceko_level_set(int n) { atomic_store(&level, n < 0 ? 0 : n > 100 ? 100 : n); }
 int ceko_level_get(void) { return atomic_load(&level); }
 bool ceko_wifi_ready(void) { return atomic_load(&online); }
@@ -75,7 +79,7 @@ void app_main(void) {
     face_start();
 #ifdef CONFIG_CEKO_FACE_DEMO
     for (;;) {
-        ceko_state_set(CEKO_IDLE); ceko_status_set("hey ceko"); vTaskDelay(pdMS_TO_TICKS(6000));
+        ceko_state_set(CEKO_IDLE); ceko_status_set(CEKO_WAKE_HINT); vTaskDelay(pdMS_TO_TICKS(6000));
         ceko_state_set(CEKO_LISTEN); ceko_status_set("Dinliyorum"); vTaskDelay(pdMS_TO_TICKS(3000));
         ceko_state_set(CEKO_THINK); ceko_status_set("Dusunuyorum"); vTaskDelay(pdMS_TO_TICKS(2000));
         ceko_state_set(CEKO_SPEAK); ceko_status_set("Ceko");
@@ -98,9 +102,12 @@ void app_main(void) {
         return;
     }
     board_audio_init();
+#ifdef CONFIG_CEKO_TOUCH_WAKE
+    touch_start();
+#endif
     wifi_init();
     realtime_start();
     speech_start();
-    ceko_status_set("hey ceko");
+    ceko_status_set(CEKO_WAKE_HINT);
     ceko_state_set(CEKO_IDLE);
 }

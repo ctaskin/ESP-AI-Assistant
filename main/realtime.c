@@ -64,6 +64,27 @@ static void fail_turn(const char *status, const char *code) {
     ceko_status_set(status); atomic_store(&abort_audio,true);
     xEventGroupSetBits(events,EV_TURN_FAIL);
 }
+// Separate the failure classes: a rejected key, a missing model and a quota
+// stop all arrive as an HTTP status on the upgrade handshake, while a
+// certificate problem never reaches HTTP at all.
+static const char *connection_error_text(const esp_websocket_error_codes_t *e) {
+    ESP_LOGE(TAG,
+        "WebSocket error: type=%d http_status=%d tls_esp_err=%s tls_stack_err=%d tls_cert_flags=0x%08x sock_errno=%d",
+        (int)e->error_type, e->esp_ws_handshake_status_code,
+        esp_err_to_name(e->esp_tls_last_esp_err), e->esp_tls_stack_err,
+        (unsigned)e->esp_tls_cert_verify_flags, e->esp_transport_sock_errno);
+    switch (e->esp_ws_handshake_status_code) {
+    case 401: return "API anahtari reddedildi (401)";
+    case 403: return "Erisim yok (403)";
+    case 404: return "Model bulunamadi (404)";
+    case 429: return "Kota veya hiz siniri (429)";
+    default: break;
+    }
+    // Either the root is absent from the certificate bundle or something on the
+    // network is terminating TLS with a certificate of its own.
+    if (e->esp_tls_stack_err || e->esp_tls_cert_verify_flags) return "TLS: sertifika dogrulanamadi";
+    return "Baglanti hatasi";
+}
 static void link_lost(const char *why) {
     if (atomic_load(&closing)) return;
     if (atomic_load(&turn_active)) fail_turn(why,NULL); else ESP_LOGW(TAG,"%s",why);
@@ -149,7 +170,7 @@ static void on_json(const char *json) {
 static void websocket_event(void *arg,esp_event_base_t base,int32_t id,void *event_data) {
     esp_websocket_event_data_t *e=event_data;
     if (id==WEBSOCKET_EVENT_CONNECTED) xEventGroupSetBits(events,EV_CONNECTED);
-    else if (id==WEBSOCKET_EVENT_ERROR) link_lost("Baglanti hatasi");
+    else if (id==WEBSOCKET_EVENT_ERROR) link_lost(connection_error_text(&e->error_handle));
     else if (id==WEBSOCKET_EVENT_DISCONNECTED) link_lost("Baglanti kesildi");
     else if (id==WEBSOCKET_EVENT_DATA) {
         if (e->data_len<0 || e->payload_len<0 || e->payload_offset<0) { link_lost("WebSocket veri hatasi"); return; }
@@ -229,7 +250,7 @@ static bool open_session(void) {
     }
     free(recap);
     if (!ready) { ESP_LOGE(TAG,"setup failed"); return false; }
-    if (ceko_state_get()==CEKO_IDLE) ceko_status_set("hey ceko");
+    if (ceko_state_get()==CEKO_IDLE) ceko_status_set(CEKO_WAKE_HINT);
     ESP_LOGI(TAG,"session open (%s), free PSRAM=%u",prov->name,(unsigned)heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
     return true;
 }
@@ -299,7 +320,19 @@ static void serve(utterance_t u) {
     if (!ok) { ceko_state_set(CEKO_ERROR); vTaskDelay(pdMS_TO_TICKS(2500)); }
     // Acoustic tail cooldown; capture task continues draining microphone locally.
     ceko_state_set(CEKO_THINK); ceko_level_set(0); vTaskDelay(pdMS_TO_TICKS(600));
-    ceko_status_set("hey ceko"); ceko_state_set(CEKO_IDLE);
+#if CONFIG_CEKO_FOLLOWUP_SECONDS > 0
+    if (ok) {
+        // Leave a follow-up window open so a conversation does not need the wake
+        // word for every turn; the capture gate closes it by itself when nothing
+        // is said. The recording buffer is free again here: it was encoded and
+        // sent before playback began and nothing below touches it.
+        ceko_status_set("Dinliyorum"); ceko_state_set(CEKO_LISTEN);
+    } else
+#endif
+    {
+        // After a failure go straight back to idle instead of listening on.
+        ceko_status_set(CEKO_WAKE_HINT); ceko_state_set(CEKO_IDLE);
+    }
     // A broken link is dropped here so the idle loop can rebuild it in advance.
     if (xEventGroupGetBits(events)&EV_LINK_DOWN) {
         close_session(); session_policy_closed(&policy,now_ms(),true);

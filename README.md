@@ -6,18 +6,17 @@
 ## Davranış
 
 1. Siyah ekranda turkuaz iki göz aralıklarla kırpılır, hafifçe etrafa bakar.
-2. Beklerken ses yalnızca cihazdaki AFE ve deneysel komut tanıyıcıda işlenir; internete gönderilmez.
-   Komut tanıyıcı sürekli çalışmaz: yalnızca yerel VAD konuşma duyduğunda devreye girer ve
-   öncesindeki 300 ms tamponu da modele verilir.
-3. “Hey ceko” algılanınca gözler büyür ve yeşile döner. `Dinliyorum` görünür.
-   Uyandırma tutmazsa **BOOT düğmesine** basmak da dinlemeyi başlatır (bring-up için).
+2. Beklerken ses yalnızca cihazdaki AFE ve WakeNet'te işlenir; internete gönderilmez.
+3. **“Hi ESP”** algılanınca gözler büyür ve yeşile döner, `Dinliyorum` görünür.
+   Ekrana dokunmak veya BOOT düğmesine basmak da aynı işi yapar.
 4. Bundan sonraki konuşma alınır; 1 saniyelik sessizlikte kayıt tamamlanır.
 5. Ses, **açılışta kurulmuş ve açık tutulan** WebSocket oturumundan gönderilir.
    Yanıt geldikçe hoparlörden çalınır.
 6. Ağız, **çalınan sesin RMS şiddetine** göre açılıp kapanır. Fonem/dudak eşleştirmesi değildir.
-7. Cevap bitince tekrar “hey ceko” bekler. **Sohbet aynı oturumda devam eder:** az önce
-   konuşulan konuya atıf yapabilirsin. Bağlantı koparsa veya oturum yenilenirse son
-   turların kısa özeti yeni oturuma taşınır.
+7. Cevap bitince **6 saniyelik takip penceresi** açık kalır: devam eden soruda uyandırma
+   sözcüğünü tekrarlamana gerek yok. Bir şey söylemezsen kendiliğinden beklemeye döner.
+   **Sohbet aynı oturumda devam eder:** az önce konuşulan konuya atıf yapabilirsin.
+   Bağlantı koparsa veya oturum yenilenirse son turların kısa özeti yeni oturuma taşınır.
 
 **Bas-konuş yok.** Turun bittiğini yerel sessizlik algılama bildirir.
 Bilgisayar/bridge açık kalmadan, kart Wi-Fi üzerinden doğrudan servise bağlanır.
@@ -28,26 +27,24 @@ Google araması servis tarafında çalışır; OpenAI'de uzak bir MCP arama sunu
 adresi girmek gerekir. OpenAI'nin hosted `web_search` aracı Realtime uç noktasında
 belgelenmiş değil; varsayılan olarak istenmiyor (menüden deneysel olarak açılabilir). Karşılaştırma, fiyatlar ve gerekçe: `docs/PROVIDERS.md`.
 
-## Önce bilmen gereken iki sınır
+## Önce bilmen gereken sınırlar
 
-- **“Hey ceko” deneysel:** Hazır/eğitilmiş Türkçe WakeNet modeli yok. MultiNet7 İngilizce
-  komut tanıyıcısı, `hey jeko` yazımıyla sürekli çalıştırılıyor ve zaman aşımlarında sıfırlanıyor.
-  Bu, Espressif'in önerdiği WakeNet → MultiNet zincirinin yerine kullanılan prototip yaklaşımıdır.
-  Türkçe /ceko/ telaffuzunun tanınması ve yanlış uyanma oranı fiziksel kartta doğrulanmadı.
-  `menuconfig > Ceko` altında yazım ve güven eşiği değiştirilebilir. Güvenilir ürün için özel
-  wake-word modeli eğitimi/entegrasyonu gerekir. Alternatif ifade sessizce devreye sokulmaz.
-  MultiNet7 bu yongada gerçek zamanlı olarak *sürekli* çalışamıyor (çekirdek 1 doluyor ve
-  AFE tamponu taşıyor), bu yüzden yalnızca konuşma duyulduğunda çalıştırılıyor. Sessiz
-  odada işlemci yükü yok denecek kadar az; konuşurken çekirdek 1 yine doluyor.
-- **Dokunmatik yok:** Ekran dokunmatik olsa da bu firmware'de dokunmatik sürücüsü
-  **uygulanmadı**. Girişler: uyandırma sözcüğü ve BOOT düğmesi.
-- **Yarı çift yönlü:** Ceko cevap verirken mikrofon işlenip atılır. Kendi sesine uyanmaz;
-  fakat konuşurken sözünü kesme yoktur. Bu sürümde akustik yankı giderme kapalıdır.
+- **Uyandırma sözcüğü “Hi ESP”:** Espressif'in hazır WakeNet9 modeli (`wn9_hiesp`)
+  kullanılıyor; sürekli dinlemek için tasarlanan motor budur. Türkçe “ceko” için eğitilmiş
+  hazır model yok. Önceki sürümdeki MultiNet7 denemesi bırakıldı: MultiNet bir *komut*
+  tanıyıcıdır, uyandırma sözcüğünden **sonra** çalışmak üzere tasarlanmıştır ve bu yongada
+  sürekli çalıştırıldığında gerçek zamanı yakalayamıyordu (çekirdek 1 doluyor, AFE tamponu
+  taşıyordu). Türkçe bir uyandırma sözcüğü istiyorsan Espressif'e özel model eğittirmek
+  gerekir; bu ayrı bir iş kalemidir.
+  Sözcük `menuconfig > ESP Speech Recognition > Load Multiple Wake Words` altından,
+  eşiği `menuconfig > Ceko > WakeNet detection threshold` ile değiştirilir.
+- **Üç giriş yolu:** uyandırma sözcüğü, ekrana dokunma, BOOT düğmesi. Üçü de yalnızca
+  beklerken kabul edilir; Ceko düşünürken/konuşurken kayıt tamponu ağ görevine ödünç
+  verilmiştir ve dokunuş yok sayılır.
+- **Yarı çift yönlü:** Ceko cevap verirken mikrofon işlenip atılır ve WakeNet kapatılır;
+  kendi sesine uyanmaz. Konuşurken sözünü kesme yoktur, akustik yankı giderme kapalıdır.
 - **Gemini yolu doğrulanmadı:** Gemini Live mesaj alanları dokümantasyondan yazıldı,
-  canlı bir hesapla denenmedi. OpenAI yolu da bu projede canlı çağrıyla test edilmedi.
-
-Uyandırma tanıyıcısı gecikmeli karar verebildiği için başlangıçta “hey ceko” dedikten sonra
-**gözler yeşile dönünce konuş**. Aynı nefeste devam edilen komutun ilk hecesi kaçabilir.
+  canlı bir hesapla denenmedi.
 
 ## Kurulum — Mac / VS Code
 
@@ -81,7 +78,7 @@ Hedef yonga esp32s3 değilse derleme en başta açık bir mesajla durur; ayrınt
 "Derleme sorunları" bölümünde.
 
 `XXXX` yerine eklentinin bulduğu gerçek portu yaz. İlk yüklemede **tam `flash`** yap:
-MultiNet model bölümü de yüklenir. Yalnızca `app-flash` kullanma. Seri monitörden çıkış: `Ctrl+]`.
+WakeNet model bölümü de yüklenir. Yalnızca `app-flash` kullanma. Seri monitörden çıkış: `Ctrl+]`.
 Kart görünmüyorsa BOOT'a basılı tutarak USB'ye bağla, ardından bırak.
 
 Kullanılabilir OpenAI model adları hesap bazında değişebilir. `model_not_found`, `invalid_api_key`
@@ -148,33 +145,23 @@ yürütme alanı olmadan, en sonda transkripsiyon olmadan. Logdaki `param=` hang
 reddedildiğini söyler; `session configured without optional fields (level N)` satırı da hangi
 kademede bağlanıldığını gösterir. Kalıcı çözüm için o alanı `menuconfig`'den kapat.
 
-**Uyandırma hiç tetiklenmiyor**
-Seri logda beş saniyede bir şu satır basılır:
+**Uyandırma tetiklenmiyor**
+Seri logda beş saniyede bir mikrofon tepe seviyesi basılır:
 
 ```
-speech: idle: 78000 ornek, 12000 konusma, tepe 34%, 96 model parcasi
+speech: Microphone peak level over 5 s: 34/100
 ```
 
-- `tepe %0-1` ise mikrofon veri üretmiyor: I2S slot/kazanç/pinleri kontrol et
-  (`menuconfig > Ceko > Use right I2S microphone slot`).
-- `konusma 0` ama tepe yüksekse VAD açılmıyor; `Run the recognizer above this
-  microphone level percent` değerini düşür.
-- `model parcasi` artıyorsa tanıyıcı çalışıyor ama eşleşme yok. Konuşurken
-  `MultiNet candidate: id=1 prob=0.62 threshold=0.85` satırı çıkarsa yazım tutuyor
-  demektir, güven eşiğini düşür. Hiç çıkmıyorsa `hey jeko` yazımı Türkçe telaffuzu
-  yakalamıyor; kalıcı çözüm WakeNet aşamasıdır.
+- `0/100` ise mikrofon veri üretmiyor: kodek, I2S slot ve kazancı kontrol et
+  (`menuconfig > Ceko > Use right I2S microphone slot`). Bu haldeyken hiçbir uyandırma
+  sözcüğü eşleşemez.
+- Seviye geliyorsa ama uyanmıyorsa `Wake word detected` satırı hiç çıkmıyordur; eşiği
+  düşür (`menuconfig > Ceko > WakeNet detection threshold`, örneğin 60) ve sözcüğü
+  ekrandan uzaklaşmadan, normal ses tonuyla dene.
+- Açılışta `No WakeNet model in the 'model' partition` satırı varsa model seçili değildir:
+  `menuconfig > ESP Speech Recognition > Load Multiple Wake Words`.
 
-Bu sırada uçtan uca akışı **BOOT düğmesiyle** deneyebilirsin: bas, soruyu sor,
-sessizlikte kayıt kapanır ve yanıt hoparlörden çalınır.
-
-**`CONFIG_CEKO_... undeclared` derleme hatası**
-`menuconfig` seçenekleri değiştiğinde `sdkconfig` yalnızca CMake yeniden çalışırken
-üretilir. Düz `ninja` (VS Code eklentisinin build düğmesi dahil) bunu tetiklemez.
-Depoyu güncelledikten sonra bir kez:
-
-```sh
-idf.py reconfigure && idf.py build
-```
+Bu sırada uçtan uca akışı ekrana dokunarak veya BOOT düğmesiyle deneyebilirsin.
 
 **`Hedef yonga 'esp32'`** Repoya daha önce `CONFIG_IDF_TARGET="esp32"` içeren bir
 `sdkconfig` girmişti ve derlemeyi yanlış yongaya yönlendiriyordu. Dosya artık
@@ -218,9 +205,11 @@ TLS sertifika kontrolü açıktır, sistem saati NTP ile ayarlanır. Sertifika k
 | Akıl yürütme | `low` | Gecikmeyi düşük tutar; boş bırakılırsa alan gönderilmez |
 | Web araması | Açık | Gemini'de Google araması hazır; OpenAI'de uzak MCP sunucusu adresi gerekir |
 | Bağlam taşıma | 4 tur | Kopma/yenileme sonrası taşınan tur sayısı; 0 kapatır |
-| Uyandırma yazımı | `hey jeko` | Türkçe ceko için deneysel İngilizce yazım |
-| Tanıyıcı eşiği | %2 mikrofon seviyesi | Altında model çalışmaz; 0 sürekli çalıştırır |
+| Uyandırma sözcüğü | `Hi ESP` (WakeNet9 `wn9_hiesp`) | ESP Speech Recognition menüsünden seçilir |
+| Uyandırma eşiği | 0 (model varsayılanı) | 40-99 ile elle bastırılabilir |
+| Dokunmatik | Açık | Ekrana dokununca dinlemeye geçer |
 | BOOT düğmesi | Açık | Beklerken basınca dinlemeye geçer |
+| Takip penceresi | 6 saniye | Cevaptan sonra uyandırma sözcüğü gerekmez; 0 kapatır |
 | Güven eşiği | %85 | Yanlış uyanma/kaçırma dengesi |
 | Sessizlik | 1000 ms | Sorunun bittiğine karar verme |
 | Maksimum kayıt | 20 saniye | RAM ve kullanım sınırı; aşılırsa kayıt gönderilmez |
@@ -251,14 +240,14 @@ Yanlış uyandırma sonrası gerçek konuşma algılanırsa o kayıt API'ye gön
 |---|---|
 | `main/board.c` | Güç, ES8311 ve I2S ses sürücüsü |
 | `main/face.c` | AMOLED, LVGL 9, göz ve ağız animasyonu |
-| `main/speech.c` | Yerel AFE, MultiNet, uyandırma ve kayıt |
+| `main/speech.c` | Yerel AFE, WakeNet uyandırma, BOOT düğmesi ve kayıt |
+| `main/touch.c` | Dokunmatik panel; dokununca dinlemeye geçer |
 | `main/realtime.c` | Kalıcı WebSocket oturumu, ses kuyruğu, hata ve zaman aşımı |
 | `main/rt_openai.c` | OpenAI Realtime protokolü, araçlar, transkript |
 | `main/rt_gemini.c` | Gemini Live protokolü, Google araması, oturum devamı |
 | `main/session_policy.c` | Bağlan/yenile/geri çekil kararları |
 | `main/history.c` | Yeniden bağlanınca taşınan kısa konuşma özeti |
 | `main/capture_gate.c` | Konuşma/sessizlik ve kayıt süresi sınırları |
-| `main/wake_gate.c` | Komut tanıyıcıyı VAD'a bağlar, 300 ms ön tampon tutar |
 | `main/audio_math.c` | 16↔24 kHz FIR dönüşümü ve RMS |
 | `main/ws_message.c` | Sınırlı boyutlu parçalı WebSocket mesaj birleştirme |
 | `tests/test_core.c` | Donanımdan bağımsız sınır/akış testleri |

@@ -59,6 +59,29 @@
   yani MultiNet konuşurken hâlâ gerçek zamanın gerisinde. Tanıyıcı tamponu iç RAM'e alındı;
   bu tek başına yetmezse kalıcı çözüm WakeNet aşamasıdır. Watchdog uyarısı kesildi.
 
+## claude/wizardly-albattani-0tc3dm dalının birleştirilmesi
+
+Paralel bir dalda yapılmış ve bu dalda bulunmayan işler tek tek taşındı:
+
+- **WakeNet9 `wn9_hiesp`** sürekli uyandırma. Bu daldaki MultiNet7 + VAD kapısı çözümü
+  (`wake_gate.c`) tamamen kaldırıldı; MultiNet artık hiç kullanılmıyor. `sdkconfig.defaults`
+  buna göre değişti (`CONFIG_SR_WN_WN9_HIESP=y`, `CONFIG_SR_MN_EN_NONE=y`) ve MultiNet
+  yüzünden konulan `CONFIG_ESP_TASK_WDT_CHECK_IDLE_TASK_CPU1=n` geri alındı.
+- **Dokunmatik panel** (`main/touch.c`, codec I2C hattı, 0x15) ve `board_i2c_bus()`.
+- **`ceko_state_try_listen()`**: IDLE dışından kayıt açılmasını engelleyen atomik geçiş.
+  Uyandırma, dokunma ve BOOT düğmesi bu kapıdan geçiyor.
+- **Cevap sonrası takip penceresi** (6 sn) ve `capture_gate_init`'in bekleme parametresi.
+- **Bağlantı hatası sınıflandırması** (401/403/404/429 ve TLS ayrımı).
+- **IDF 6 köprüsü** `__COMPONENT_REQUIRES_COMMON` ile genel hale getirildi; bu dalın yalnızca
+  iki bileşeni hedefleyen köprüsü kaldırıldı. `espressif/cjson` açık bağımlılık oldu, `lwip`
+  `REQUIRES` listesine eklendi.
+- **Alınmayan tek şey:** `certs/GlobalSign_Root_CA.pem` ve
+  `CONFIG_MBEDTLS_CUSTOM_CERTIFICATE_BUNDLE`. O dal TLS'i, Mozilla listesinden çıkarılmış
+  1998 tarihli kökü pakete geri ekleyerek çözmüş. Bu dalda sorun
+  `CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_CROSS_SIGNED_VERIFY` ile çözüldü: zincirdeki
+  `GTS Root R4` zaten pakette ve güncel. Emekliye ayrılmış bir kökü yeniden güvenilir
+  yapmamak için o yol tercih edilmedi; kartta doğrulandı.
+
 ## Üçüncü çalıştırma: oturum açıldı, giriş yolu yok
 
 - **Doğrulandı:** `realtime: session open (openai)` — TLS, `session.update` ve tüm

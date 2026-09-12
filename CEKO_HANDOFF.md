@@ -38,7 +38,8 @@ Başka bilgisayara/oturuma geçerken ZIP ve bu belge birlikte aktarılmalı. Yuk
 | `main/app_main.c`, `main/ceko.h` | Başlangıç, Wi-Fi/NTP, ortak durum ve arayüzler |
 | `main/board.c` | Güç, ES8311, I2C/I2S mikrofon ve hoparlör |
 | `main/face.c` | SH8601 AMOLED, LVGL 9, göz/ağız animasyonu |
-| `main/speech.c` | AFE/VAD, MultiNet, uyandırma ve kayıt |
+| `main/speech.c` | AFE/VAD, WakeNet uyandırma, BOOT düğmesi ve kayıt |
+| `main/touch.c` | Dokunmatik panel (codec I2C hattı, 0x15) |
 | `main/capture_gate.c` | Konuşma bitişi, boş/uzun kayıt sınırları |
 | `main/realtime.c` | Kalıcı TLS WebSocket oturumu, ses gönderme/çalma, hata yönetimi |
 | `main/rt_proto.h`, `main/rt_openai.c`, `main/rt_gemini.c` | Servis protokolleri (OpenAI Realtime, Gemini Live) |
@@ -66,15 +67,23 @@ Sohbet aynı oturumda sürer. Oturum ömrü dolmadan cihaz boştayken yenilenir;
 
 Tek kayıt tamponu ağ görevine ödünç verilir; `IDLE` durumuna dönene kadar üzerine yazılmaması gerekir. Bu sahiplik kuralı, yeni sohbet veya söz kesme özellikleri eklenirken korunmalı.
 
-## 4. En önemli teknik belirsizlik: “hey ceko”
+## 4. Uyandırma: WakeNet9 “Hi ESP”
 
-Bu uygulamada özel eğitilmiş Türkçe wake-word modeli bulunmuyor. ESP-SR **MultiNet7 İngilizce komut tanıyıcısı**, `hey jeko` yazımı ve %85 güven eşiğiyle sürekli çalıştırılıyor; zaman aşımında sıfırlanıyor. WakeNet devre dışı.
+Sürekli dinleyen motor artık **WakeNet9 `wn9_hiesp`**. Önceki MultiNet7 denemesi bırakıldı:
+MultiNet bir komut tanıyıcıdır, uyandırma sözcüğünden sonra çalışmak üzere tasarlanmıştır ve
+bu yongada sürekli çalıştırıldığında gerçek zamanı yakalayamıyordu — çekirdek 1 doluyor,
+`Ringbuffer of AFE(FEED) is full` uyarıları çıkıyor ve boştaki görev watchdog'u besleyemiyordu.
+Fiziksel kartta hiçbir denemede tetiklenmedi.
 
-Bu, prototip için deneysel komut yakalama yöntemidir. Türkçe “ceko” telaffuzunun başarı oranı, ortam gürültüsü etkisi ve yanlış uyanmalar **ölçülmedi**. Derlemenin geçmesi bu özelliğin çalıştığını kanıtlamaz.
+Türkçe “ceko” için eğitilmiş hazır model bulunmuyor. Türkçe bir uyandırma sözcüğü istenirse
+Espressif'e özel model eğittirmek gerekir; ayrı iş kalemidir. Sözcük
+`menuconfig > ESP Speech Recognition > Load Multiple Wake Words`, eşik
+`menuconfig > Ceko > WakeNet detection threshold` altındadır.
 
-İlk kullanımda “hey ceko” denildikten sonra gözler yeşile dönünce soru sorulmalı. Uyandırmayla aynı nefeste söylenen sorunun ilk hecesi kaybolabilir. Kullanıcının istediği kesintisiz akış henüz bu açıdan doğrulanmış değildir.
-
-Algılama başarısızsa önce mikrofon örnekleri/slot/kazanç doğrulanmalı, ardından yazım ve eşik denenmeli. Kullanıcı talebi olmadan bas-konuşa veya farklı uyandırma sözcüğüne geçilmemeli. Uzun vadede özel wake-word modeli ve gerekirse ön ses tamponu değerlendirilmeli.
+WakeNet yalnızca beklerken açıktır; Ceko konuşurken kapatılır, böylece kendi sesine uyanmaz.
+Uyandırmanın yanında iki giriş yolu daha var: ekrana dokunma (`main/touch.c`) ve BOOT düğmesi.
+Üçü de `ceko_state_try_listen()` üzerinden geçer; bu, kayıt tamponu ağ görevine ödünç
+verilmişken (THINK/SPEAK) yeni kayıt açılmasını engelleyen tek kapıdır.
 
 ## 5. Donanım ve bağımlılıklar
 
@@ -92,7 +101,7 @@ Aşağıdakiler mevcut kaynak kodundaki pin eşlemeleridir; üretici referansın
 | Ekran CS / CLK / RESET | 10 / 11 / 8 |
 | Ekran QSPI D0 / D1 / D2 / D3 | 12 / 13 / 14 / 15 |
 
-Hoparlörün pakette bulunması, konektör uyumu ve empedansı fiziksel kart/şema üzerinden teyit edilmeli. Dokunmatik kullanıcı etkileşimi bu sürümde uygulanmadı.
+Hoparlörün pakette bulunması, konektör uyumu ve empedansı fiziksel kart/şema üzerinden teyit edilmeli. Dokunmatik panel codec I2C hattında (SDA 47 / SCL 48), adres 0x15, reset GPIO 7.
 
 Derleme hedefi ESP-IDF **6.1**, ESP32-S3. Manifest aralığı `>=6.1.0,<7.0.0`. v0.1 belgeleri 5.5.2 diyordu; proje 6.1'e taşındı, 5.5 ile derleneceği artık doğrulanmıyor. IDF 6.0'da eski `driver` bileşeni `esp_driver_*` başlıklarını dışarı açmadığı için `esp_codec_dev` en az 1.6.2 olmalı; kök `CMakeLists.txt` henüz taşınmamış bileşenler için köprü kuruyor.
 
@@ -118,7 +127,9 @@ Kesin çözülmüş sürümler için `dependencies.lock` korunmalı. CPU 240 MHz
 | Oturum yenileme | OpenAI 55. dakikada, Gemini 9. dakikada, cihaz boştayken |
 | Yeniden bağlanma | 2 → 60 saniye artan gecikme |
 | Ses | `marin` |
-| Uyandırma yazımı / eşik | `hey jeko` / %85 |
+| Uyandırma | WakeNet9 `wn9_hiesp` (“Hi ESP”), eşik model varsayılanı |
+| Diğer giriş yolları | Ekrana dokunma, BOOT düğmesi |
+| Takip penceresi | 6 saniye |
 | Mikrofon | 16 kHz PCM16, varsayılan sol I2S slot, 24 dB kazanç |
 | Hoparlör seviyesi | %65 |
 | Ekran yönü | 180° |

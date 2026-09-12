@@ -48,7 +48,7 @@ config CEKO_TRANSCRIBE_MODEL
     help
       Only used when conversation memory is on; it is billed separately.
 config CEKO_OPENAI_MCP_URL
-    string "Remote MCP server URL for search (empty = try hosted web search)"
+    string "Remote MCP server URL for search (empty = no web access)"
     depends on CEKO_PROVIDER_OPENAI && CEKO_WEB_SEARCH
     default ""
 config CEKO_OPENAI_MCP_LABEL
@@ -98,32 +98,46 @@ config CEKO_MEMORY_TURNS
       connection. Above 0 the service is asked to transcribe input audio,
       which is billed separately.
 
-config CEKO_WAKE_PHRASE
-    string "Experimental MultiNet spelling for hey ceko"
-    default "hey jeko"
-config CEKO_WAKE_CONFIDENCE
-    int "Wake confidence percent"
-    range 50 99
-    default 85
-config CEKO_WAKE_MIN_LEVEL
-    int "Run the recognizer above this microphone level percent (0 = always)"
-    range 0 50
-    default 2
+config CEKO_WAKE_THRESHOLD
+    int "WakeNet detection threshold percent (0 = model default)"
+    range 0 99
+    default 0
     help
-      The recognizer cannot run on every frame in real time, so it only runs
-      while the local VAD reports speech or the microphone level is above this
-      value. 0 runs it continuously, which overloads core 1.
+      The wake word itself is chosen under
+      "ESP Speech Recognition > Load Multiple Wake Words", not here.
+
+      0 keeps the threshold the model ships with, which is what Espressif
+      tuned it to. Set 40-99 only to override it: lower reacts more easily
+      but wakes on the wrong sounds more often.
+config CEKO_TOUCH_WAKE
+    bool "Start listening when the screen is touched"
+    default y
+    help
+      A tap is only accepted while idle; during THINK and SPEAK the recording
+      buffer belongs to the network task.
 config CEKO_BOOT_BUTTON
     bool "BOOT button (GPIO0) starts listening"
     default y
     help
-      Bring-up aid: press BOOT while idle to start listening without the wake
-      word. There is no touch input in this firmware.
+      A third way in, next to the wake word and the touch panel. It needs
+      neither microphone nor panel, so it keeps working while those are being
+      brought up.
 
 config CEKO_SILENCE_MS
     int "End utterance after silence (ms)"
     range 400 3000
     default 1000
+config CEKO_FOLLOWUP_SECONDS
+    int "Keep listening after an answer (seconds, 0 = off)"
+    range 0 20
+    default 6
+    help
+      After Ceko answers it stays in listening mode for this long, so a
+      conversation can continue without repeating the wake word. Say nothing
+      and it returns to idle on its own.
+
+      The session already keeps the conversation, so a follow-up turn costs
+      only the new audio. After a failed request the window is not opened.
 config CEKO_MAX_RECORD_SECONDS
     int "Maximum utterance seconds"
     range 5 30

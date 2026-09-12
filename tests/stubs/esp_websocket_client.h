@@ -12,10 +12,21 @@ typedef struct {
     bool disable_auto_reconnect;
     int network_timeout_ms, buffer_size, task_stack, ping_interval_sec;
 } esp_websocket_client_config_t;
+typedef enum { WEBSOCKET_ERROR_TYPE_NONE = 0, WEBSOCKET_ERROR_TYPE_TCP_TRANSPORT,
+               WEBSOCKET_ERROR_TYPE_PONG_TIMEOUT, WEBSOCKET_ERROR_TYPE_HANDSHAKE } esp_websocket_error_type_t;
+typedef struct {
+    esp_err_t esp_tls_last_esp_err;
+    int esp_tls_stack_err;
+    int esp_tls_cert_verify_flags;
+    esp_websocket_error_type_t error_type;
+    int esp_ws_handshake_status_code;
+    int esp_transport_sock_errno;
+} esp_websocket_error_codes_t;
 typedef struct {
     const char *data_ptr;
     int data_len, payload_len, payload_offset, op_code;
     bool fin;
+    esp_websocket_error_codes_t error_handle;
 } esp_websocket_event_data_t;
 enum { WEBSOCKET_EVENT_ANY = -1, WEBSOCKET_EVENT_CONNECTED, WEBSOCKET_EVENT_DISCONNECTED,
        WEBSOCKET_EVENT_DATA, WEBSOCKET_EVENT_ERROR };
